@@ -77,8 +77,9 @@ warn_required_dynamic_aliases = true
 module = ["databento.*", "norgatedata.*", "yfinance.*"]
 ignore_missing_imports = true
 
-# lightgbm and sklearn.* ship no (complete) type stubs; ignore missing imports for
-# the meta-model's third-party learners without loosening the strict gate elsewhere.
+# lightgbm, sklearn.* and joblib ship no (complete) type stubs; ignore missing
+# imports for the meta-model's third-party learners + model persistence without
+# loosening the strict gate elsewhere.
 [[tool.mypy.overrides]]
-module = ["lightgbm.*", "sklearn.*"]
+module = ["lightgbm.*", "sklearn.*", "joblib.*"]
 ignore_missing_imports = true
