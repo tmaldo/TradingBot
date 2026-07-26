@@ -1,17 +1,71 @@
-# PROP-FIRM SURVIVAL RULES CONFIG -- STUB (real values + validating model arrive in T2).
+# Prop-firm evaluation rule presets for the survival gate (task T2, Global Constraint G11).
 #
-# Drives the Monte Carlo survival gate (Global Constraint G11): >90% survival
-# against these rules is required before any live recommendation. This file
-# documents the intended schema only; T0 does not load or validate it.
+# Validated by futures_engine.prop.rules.PropRuleSet; the mapping key is the preset name.
+# Fields:
+#   start_balance                        -- evaluation account starting balance (USD).
+#   trailing_dd                          -- trailing max-loss / drawdown amount (USD).
+#   trailing_mode                        -- "eod" | "intraday_unrealized".
+#   trailing_freezes_at_start_balance    -- true if the trailing floor locks at the start
+#                                           balance once reached, then stops trailing.
+#   daily_loss_limit                     -- USD daily loss cap, or null if the firm has none.
+#   consistency_max_day_pct              -- max single-day profit as a fraction of total
+#                                           profit at payout, or null if not enforced.
+#   profit_target                        -- USD profit required to pass.
+#   min_trading_days                     -- minimum days before a pass is granted.
 #
-# Planned schema (T2 defines the pydantic model):
-#
-# prop_rules:
-#   <profile_name>:
-#     account_size: float
-#     trailing_drawdown: float
-#     trailing_dd_mode: str        # "intraday_unrealized" | "eod"
-#     daily_loss_limit: float
-#     consistency_rule: float|null # e.g. max share of profit from a single day
-#     profit_target: float|null
-prop_rules: {}
+# All values are the CURRENTLY PUBLISHED 50K evaluation rules, retrieved 2026-07-25.
+# Prop firms revise terms frequently; confirm against the firm's site before live use.
+
+prop_rules:
+  # Topstep 50K Trading Combine.
+  #   Source: https://tradetanto.com/learn/topstep-rules (retrieved 2026-07-25)
+  #   $2,000 trailing Maximum Loss Limit, trails END-OF-DAY balances and freezes at the
+  #   $50,000 starting balance once reached; $1,000 daily loss limit (soft pause, not a
+  #   violation); $3,000 target; 50% consistency rule; no minimum trading days.
+  topstep_50k:
+    start_balance: 50000.0
+    trailing_dd: 2000.0
+    trailing_mode: eod
+    trailing_freezes_at_start_balance: true
+    daily_loss_limit: 1000.0
+    consistency_max_day_pct: 0.50
+    profit_target: 3000.0
+    min_trading_days: 0
+
+  # MyFundedFutures 50K (current standard evaluation; Flex/Pro/Rapid share these params).
+  #   Sources (retrieved 2026-07-25):
+  #     https://propfirmapp.com/prop-firms/my-funded-futures
+  #     https://help.myfundedfutures.com/en/articles/8348565-max-eod-trailing
+  #   $2,000 END-OF-DAY trailing drawdown that locks at start balance + $100 once reached
+  #   (approximated here by the start-balance freeze; the exact +$100 offset is not
+  #   representable by the boolean and is a conservative $100 simplification); no daily
+  #   loss limit; $3,000 target (6%); 50% consistency during evaluation; 2 minimum days.
+  #   NOTE: the legacy "Starter"/"Expert" plans named in the T2 brief were retired in 2025.
+  mffu_50k:
+    start_balance: 50000.0
+    trailing_dd: 2000.0
+    trailing_mode: eod
+    trailing_freezes_at_start_balance: true
+    daily_loss_limit: null
+    consistency_max_day_pct: 0.50
+    profit_target: 3000.0
+    min_trading_days: 2
+
+  # Apex Trader Funding 50K evaluation (intraday-trailing variant).
+  #   Sources (retrieved 2026-07-25):
+  #     https://tradetanto.com/learn/apex-trader-funding-rules-what-you-need-to-know
+  #     https://propfirmapp.com/prop-firms/apex-trader-funding
+  #   $2,000 trailing threshold; Apex offers both EOD and INTRADAY (unrealized) trailing --
+  #   the intraday variant is modelled here. Evaluation accounts do NOT freeze at start
+  #   balance (only funded/PA accounts do, at start + $100). The intraday evaluation has no
+  #   daily loss limit and no consistency rule during evaluation (50% applies only at payout
+  #   on funded accounts). $3,000 target; no minimum trading days.
+  apex_50k:
+    start_balance: 50000.0
+    trailing_dd: 2000.0
+    trailing_mode: intraday_unrealized
+    trailing_freezes_at_start_balance: false
+    daily_loss_limit: null
+    consistency_max_day_pct: null
+    profit_target: 3000.0
+    min_trading_days: 0
