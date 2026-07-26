@@ -1,0 +1,18 @@
+# EXAMPLE STRATEGY CONFIG -- scaffold only.
+#
+# The validating pydantic model for strategy configs is defined by the strategy
+# task downstream; this file documents the intended shape so config-driven
+# strategy selection (Global Constraint G2) has a concrete example to build on.
+# The family is fixed to the trend/momentum research scope (G7). T0 does not
+# load or validate this file.
+strategy:
+  name: example_trend_momentum
+  family: trend_momentum
+  instrument: MES
+  interval: 1h
+  params:
+    lookback: 96
+    vol_target_annual: 0.15
+  labeling: triple_barrier      # primary labeling scheme (G6)
+  cv_scheme: purged_kfold       # purged k-fold with embargo (G9)
+  seed: 7

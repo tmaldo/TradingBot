@@ -1,0 +1,18 @@
+# Instrument specifications for CME micro futures (task T0 -- real values).
+#
+# Invariant enforced by InstrumentSpec: tick_value == multiplier * tick_size.
+# tick_value is the dollar value of one tick of price movement per contract.
+instruments:
+  - symbol_root: MES        # Micro E-mini S&P 500
+    exchange: CME
+    tick_size: 0.25
+    tick_value: 1.25        # 5 * 0.25
+    multiplier: 5
+    currency: USD
+
+  - symbol_root: MNQ        # Micro E-mini Nasdaq-100
+    exchange: CME
+    tick_size: 0.25
+    tick_value: 0.50        # 2 * 0.25
+    multiplier: 2
+    currency: USD

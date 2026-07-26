@@ -1,0 +1,19 @@
+# COST MODEL CONFIG -- STUB (real values + validating model arrive in T2).
+#
+# Every reported backtest result must be net of these costs, and gross-vs-net
+# must always be reported (Global Constraint G8). This file documents the
+# intended schema only; T0 does not load or validate it.
+#
+# Planned schema (T2 defines the pydantic model):
+#
+# costs:
+#   <symbol_root>:
+#     commission_per_rt: float    # round-turn commission, ~$1.02-$1.04 for micros
+#     exchange_fee_per_rt: float  # CME exchange fees
+#     nfa_fee_per_rt: float       # NFA regulatory fee
+#     spread_ticks: float         # assumed bid/ask spread in ticks
+#     slippage_model:
+#       type: str                 # e.g. "fixed_ticks" | "volatility_scaled"
+#       params: {}                # model-specific parameters
+#     one_bar_delay: bool         # optional 1-bar execution delay
+costs: {}

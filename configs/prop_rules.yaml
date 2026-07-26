@@ -1,0 +1,17 @@
+# PROP-FIRM SURVIVAL RULES CONFIG -- STUB (real values + validating model arrive in T2).
+#
+# Drives the Monte Carlo survival gate (Global Constraint G11): >90% survival
+# against these rules is required before any live recommendation. This file
+# documents the intended schema only; T0 does not load or validate it.
+#
+# Planned schema (T2 defines the pydantic model):
+#
+# prop_rules:
+#   <profile_name>:
+#     account_size: float
+#     trailing_drawdown: float
+#     trailing_dd_mode: str        # "intraday_unrealized" | "eod"
+#     daily_loss_limit: float
+#     consistency_rule: float|null # e.g. max share of profit from a single day
+#     profit_target: float|null
+prop_rules: {}
