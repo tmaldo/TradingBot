@@ -42,12 +42,24 @@ jobs:
         run: pytest
 
   lookahead-audit:
-    name: look-ahead audit (placeholder)
+    name: look-ahead audit (G4)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Placeholder job. Task T1 fills this in with the automated shift-test
-      # look-ahead audit required by Global Constraint G4 (point-in-time /
-      # no feature uses information unavailable at decision time).
-      - name: Placeholder
-        run: echo "look-ahead audit not yet implemented (arrives in T1)"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install (editable + dev extras)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      # Automated shift-test look-ahead audit required by Global Constraint G4
+      # (point-in-time / no feature uses information unavailable at decision time).
+      - name: Look-ahead shift test (pytest)
+        run: pytest tests/data/test_lookahead_audit.py -q
+
+      - name: Look-ahead audit over registered PIT checks
+        run: audit-run

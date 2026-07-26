@@ -34,6 +34,15 @@ dev = [
     # by library code). See task-T3 acceptance: CPCV cross-check.
     "skfolio",
 ]
+# Vendor SDKs live in optional extras only -- never in core dependencies (G1/G2).
+# Adapters import these lazily and raise a clear error naming the extra if absent.
+databento = ["databento>=0.34"]
+norgate = ["norgatedata>=1.0"]
+dev-data = ["yfinance>=0.2"]  # DEV ONLY -- NOT FOR VALIDATION (G1)
+
+[project.scripts]
+# Look-ahead audit over all registered point-in-time checks (CI + local, G4).
+audit-run = "futures_engine.data.audit:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["futures_engine"]
@@ -56,3 +65,9 @@ warn_unreachable = true
 init_forbid_extra = true
 init_typed = true
 warn_required_dynamic_aliases = true
+
+# Optional vendor SDKs ship no type stubs and are not installed in CI's core/dev
+# env; they are imported lazily inside adapters only (G2).
+[[tool.mypy.overrides]]
+module = ["databento.*", "norgatedata.*", "yfinance.*"]
+ignore_missing_imports = true
