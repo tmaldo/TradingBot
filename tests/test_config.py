@@ -11,7 +11,9 @@ from pydantic import ValidationError
 
 from futures_engine.core.config import (
     Settings,
+    load_costs,
     load_instruments,
+    load_prop_rules,
     load_yaml,
 )
 
@@ -153,3 +155,93 @@ def test_non_mapping_top_level_is_rejected(tmp_path: Path) -> None:
     path.write_text(yaml.safe_dump(["not", "a", "mapping"]), encoding="utf-8")
     with pytest.raises(ValueError, match="mapping"):
         load_yaml(path)
+
+
+# --- costs + prop rules (task T2) --------------------------------------------
+
+
+def test_settings_load_reads_costs_and_prop_rules() -> None:
+    settings = Settings.load(CONFIGS_DIR)
+    assert set(settings.costs) == {"MES", "MNQ"}
+    assert set(settings.prop_rules) == {"topstep_50k", "mffu_50k", "apex_50k"}
+
+
+def test_real_cost_profiles_all_in_round_turn_in_band() -> None:
+    costs = load_costs(CONFIGS_DIR / "costs.yaml")
+    for cfg in costs.values():
+        all_in_rt = (
+            cfg.commission_per_side_usd + cfg.exchange_fee_per_side_usd + cfg.nfa_fee_per_side_usd
+        ) * 2
+        assert 1.02 <= all_in_rt <= 1.04
+
+
+def test_real_prop_presets_match_published_rules() -> None:
+    presets = load_prop_rules(CONFIGS_DIR / "prop_rules.yaml")
+
+    topstep = presets["topstep_50k"]
+    assert topstep.name == "topstep_50k"  # name injected from the mapping key
+    assert topstep.trailing_mode == "eod"
+    assert topstep.trailing_freezes_at_start_balance is True
+    assert topstep.daily_loss_limit == 1000.0
+    assert topstep.profit_target == 3000.0
+
+    # Apex evaluation uses intraday-unrealized trailing and does not freeze.
+    apex = presets["apex_50k"]
+    assert apex.trailing_mode == "intraday_unrealized"
+    assert apex.trailing_freezes_at_start_balance is False
+    assert apex.daily_loss_limit is None
+
+    # MFFU has no daily loss limit but a 50% consistency rule and a 2-day minimum.
+    mffu = presets["mffu_50k"]
+    assert mffu.daily_loss_limit is None
+    assert mffu.consistency_max_day_pct == 0.50
+    assert mffu.min_trading_days == 2
+
+
+def test_unknown_key_in_cost_profile_is_rejected(tmp_path: Path) -> None:
+    path = tmp_path / "costs.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "costs": {
+                    "MES": {
+                        "commission_per_side_usd": 0.15,
+                        "exchange_fee_per_side_usd": 0.35,
+                        "nfa_fee_per_side_usd": 0.01,
+                        "spread_ticks": 1.0,
+                        "slippage": "fixed_ticks",
+                        "slippage_ticks": 1.0,
+                        "delay_bars": 0,
+                        "bogus": 1,  # unknown key
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationError):
+        load_costs(path)
+
+
+def test_unknown_key_in_prop_rule_is_rejected(tmp_path: Path) -> None:
+    path = tmp_path / "prop_rules.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "prop_rules": {
+                    "x_50k": {
+                        "start_balance": 50000.0,
+                        "trailing_dd": 2000.0,
+                        "trailing_mode": "eod",
+                        "trailing_freezes_at_start_balance": True,
+                        "profit_target": 3000.0,
+                        "min_trading_days": 0,
+                        "bogus": 1,  # unknown key
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationError):
+        load_prop_rules(path)

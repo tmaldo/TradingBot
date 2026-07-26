@@ -1,19 +1,46 @@
-# COST MODEL CONFIG -- STUB (real values + validating model arrive in T2).
+# Transaction-cost profiles for the cost model (task T2, Global Constraint G8).
 #
-# Every reported backtest result must be net of these costs, and gross-vs-net
-# must always be reported (Global Constraint G8). This file documents the
-# intended schema only; T0 does not load or validate it.
+# Every reported backtest result must be net of these costs, and gross-vs-net must
+# always be reported. Values are validated by futures_engine.costs.model.CostConfig.
 #
-# Planned schema (T2 defines the pydantic model):
+# Cost structure (all per SIDE, per contract; a round-turn is two sides):
+#   commission_per_side_usd  -- broker commission (BROKER-DEPENDENT; the values below
+#                               model a deep-discount micro broker and should be
+#                               overridden per the account actually used).
+#   exchange_fee_per_side_usd-- CME exchange + clearing fee.
+#   nfa_fee_per_side_usd     -- NFA regulatory assessment fee.
+#   spread_ticks             -- assumed full bid/ask spread in ticks, paid once per
+#                               round-turn (half on entry, half on exit).
+#   slippage / slippage_ticks-- "fixed_ticks": slippage_ticks ticks per round-turn.
+#                               "vol_scaled": slippage_ticks is a coefficient multiplying
+#                               the per-trade atr_ticks_at_entry column.
+#   delay_bars               -- optional 1-bar execution delay (0 or 1).
 #
-# costs:
-#   <symbol_root>:
-#     commission_per_rt: float    # round-turn commission, ~$1.02-$1.04 for micros
-#     exchange_fee_per_rt: float  # CME exchange fees
-#     nfa_fee_per_rt: float       # NFA regulatory fee
-#     spread_ticks: float         # assumed bid/ask spread in ticks
-#     slippage_model:
-#       type: str                 # e.g. "fixed_ticks" | "volatility_scaled"
-#       params: {}                # model-specific parameters
-#     one_bar_delay: bool         # optional 1-bar execution delay
-costs: {}
+# Fee sources (retrieved 2026-07-25):
+#   CME exchange fee = $0.35/side for both MES and MNQ; NFA regulatory fee = $0.01/side.
+#     https://www.tradestation.com/pricing/exchange-execution-and-clearing-fees/
+#   NOTE: the T2 brief cited $0.02/side as the "standard NFA assessment"; the current
+#     published rate (TradeStation, Jan 2026) is $0.01/side, used here.
+#
+# All-in round-turn (1 contract): (0.15 + 0.35 + 0.01) * 2 = $1.02, which lands in the
+# ~$1.02-$1.04 band the brief specifies (architect note 2). The commission is the only
+# broker-dependent term; raising it to $0.16/side moves the all-in RT to $1.04.
+# spread_ticks defaults to 1.0 (a typical MES/MNQ RTH one-tick book).
+costs:
+  MES: # Micro E-mini S&P 500
+    commission_per_side_usd: 0.15
+    exchange_fee_per_side_usd: 0.35
+    nfa_fee_per_side_usd: 0.01
+    spread_ticks: 1.0
+    slippage: fixed_ticks
+    slippage_ticks: 1.0
+    delay_bars: 0
+
+  MNQ: # Micro E-mini Nasdaq-100
+    commission_per_side_usd: 0.15
+    exchange_fee_per_side_usd: 0.35
+    nfa_fee_per_side_usd: 0.01
+    spread_ticks: 1.0
+    slippage: fixed_ticks
+    slippage_ticks: 1.0
+    delay_bars: 0
