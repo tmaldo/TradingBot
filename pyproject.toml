@@ -31,6 +31,11 @@ dependencies = [
     # path stays point-in-time (each label at t uses bars <= t only). Pulls
     # scipy transitively. Has Python 3.14 wheels.
     "ruptures>=1.0",
+    # scikit-learn (L2-logistic baseline) and LightGBM (gradient-boosted primary)
+    # power the meta-model pipeline (research.meta_model, G5/G6). Core deps -- the
+    # meta-model is a first-class part of the research stage, not an optional extra.
+    "scikit-learn>=1.5",
+    "lightgbm>=4.3",
 ]
 
 [project.optional-dependencies]
@@ -88,7 +93,9 @@ warn_required_dynamic_aliases = true
 module = ["databento.*", "norgatedata.*", "yfinance.*"]
 ignore_missing_imports = true
 
-# ruptures ships no type stubs; it is imported by regime.detector only.
+# ruptures (regime.detector), and lightgbm/sklearn/joblib (research.meta_model)
+# ship no complete type stubs; ignore missing imports for these third-party
+# libraries without loosening the strict gate elsewhere.
 [[tool.mypy.overrides]]
-module = ["ruptures.*"]
+module = ["ruptures.*", "lightgbm.*", "sklearn.*", "joblib.*"]
 ignore_missing_imports = true
