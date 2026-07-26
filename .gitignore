@@ -27,6 +27,9 @@ htmlcov/
 data/
 runs/
 
+# graphify generated knowledge-graph artifacts (rebuild: graphify update .)
+graphify-out/
+
 # OS / editor cruft
 .DS_Store
 *.swp
