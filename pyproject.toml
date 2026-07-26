@@ -19,6 +19,11 @@ dependencies = [
     # Politis-White optimal_block_length used by validation.stats. Pulls scipy
     # transitively (bootstrap internals); we do not import scipy directly.
     "arch>=7",
+    # scikit-learn (L2-logistic baseline) and LightGBM (gradient-boosted primary)
+    # power the meta-model pipeline (research.meta_model, G5/G6). Core deps -- the
+    # meta-model is a first-class part of the research stage, not an optional extra.
+    "scikit-learn>=1.5",
+    "lightgbm>=4.3",
 ]
 
 [project.optional-dependencies]
@@ -70,4 +75,10 @@ warn_required_dynamic_aliases = true
 # env; they are imported lazily inside adapters only (G2).
 [[tool.mypy.overrides]]
 module = ["databento.*", "norgatedata.*", "yfinance.*"]
+ignore_missing_imports = true
+
+# lightgbm and sklearn.* ship no (complete) type stubs; ignore missing imports for
+# the meta-model's third-party learners without loosening the strict gate elsewhere.
+[[tool.mypy.overrides]]
+module = ["lightgbm.*", "sklearn.*"]
 ignore_missing_imports = true
