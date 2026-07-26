@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-type-test:
+    name: ruff + mypy + pytest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install (editable + dev extras)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: Mypy (library code, strict)
+        run: mypy
+
+      - name: Pytest (offline)
+        run: pytest
+
+  lookahead-audit:
+    name: look-ahead audit (placeholder)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Placeholder job. Task T1 fills this in with the automated shift-test
+      # look-ahead audit required by Global Constraint G4 (point-in-time /
+      # no feature uses information unavailable at decision time).
+      - name: Placeholder
+        run: echo "look-ahead audit not yet implemented (arrives in T1)"
