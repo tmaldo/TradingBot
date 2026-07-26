@@ -15,6 +15,10 @@ dependencies = [
     "pydantic>=2",
     "PyYAML>=6",
     "pyarrow>=15",
+    # arch (Kevin Sheppard) provides the stationary/block bootstraps and
+    # Politis-White optimal_block_length used by validation.stats. Pulls scipy
+    # transitively (bootstrap internals); we do not import scipy directly.
+    "arch>=7",
 ]
 
 [project.optional-dependencies]
@@ -25,6 +29,10 @@ dev = [
     "mypy>=1.10",
     "pandas-stubs",
     "types-PyYAML",
+    # skfolio: maintained, sklearn-compatible CombinatorialPurgedCV used ONLY as
+    # an independent cross-check of CPCV fold structure in tests (never imported
+    # by library code). See task-T3 acceptance: CPCV cross-check.
+    "skfolio",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -48,3 +56,9 @@ warn_unreachable = true
 init_forbid_extra = true
 init_typed = true
 warn_required_dynamic_aliases = true
+
+# arch ships no type stubs; silence missing-import under strict for this one
+# third-party dependency (imported only in futures_engine/validation/stats.py).
+[[tool.mypy.overrides]]
+module = "arch.*"
+ignore_missing_imports = true
