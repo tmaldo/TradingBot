@@ -1,0 +1,34 @@
+# SDD scratch (plans, briefs, reports, ledgers)
+.superpowers/
+
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+
+# Virtual environments
+.venv/
+venv/
+
+# Build artifacts
+build/
+dist/
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+
+# Data snapshot store (future task) and run outputs
+data/
+runs/
+
+# OS / editor cruft
+.DS_Store
+*.swp
+.idea/
+.vscode/

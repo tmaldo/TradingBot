@@ -1,0 +1,50 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "futures-engine"
+version = "0.0.0"
+description = "Research-and-execution system for systematic trend/momentum trading of CME micro futures (MES/MNQ)."
+readme = "docs/AUDIT.md"
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+dependencies = [
+    "pandas>=2.2",
+    "numpy>=1.26",
+    "pydantic>=2",
+    "PyYAML>=6",
+    "pyarrow>=15",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "hypothesis>=6",
+    "ruff>=0.6",
+    "mypy>=1.10",
+    "pandas-stubs",
+    "types-PyYAML",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["futures_engine"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+# mypy: strict on library code only (futures_engine/). Tests are intentionally
+# excluded from the strict gate (they use fixtures/monkeypatching that add noise
+# with little safety benefit). See task-T0 brief: "strict-ish on futures_engine/".
+[tool.mypy]
+python_version = "3.12"
+files = ["futures_engine"]
+strict = true
+plugins = ["pydantic.mypy"]
+warn_unreachable = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
