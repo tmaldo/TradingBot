@@ -1,0 +1,14 @@
+[
+  {
+    "raw_symbol": "ESM4",
+    "instrument_id": 12345,
+    "activation": 1686873600000000000,
+    "expiration": 1718976600000000000
+  },
+  {
+    "raw_symbol": "ESU4",
+    "instrument_id": 12346,
+    "activation": 1694736000000000000,
+    "expiration": 1726839000000000000
+  }
+]
