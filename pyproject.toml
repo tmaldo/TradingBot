@@ -56,9 +56,3 @@ warn_unreachable = true
 init_forbid_extra = true
 init_typed = true
 warn_required_dynamic_aliases = true
-
-# arch ships no type stubs; silence missing-import under strict for this one
-# third-party dependency (imported only in futures_engine/validation/stats.py).
-[[tool.mypy.overrides]]
-module = "arch.*"
-ignore_missing_imports = true
