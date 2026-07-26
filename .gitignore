@@ -23,9 +23,11 @@ dist/
 .coverage.*
 htmlcov/
 
-# Data snapshot store (future task) and run outputs
-data/
-runs/
+# Data snapshot store (repo-root default) and run outputs. Anchored with a
+# leading slash so package/test dirs named "data" (futures_engine/data,
+# tests/data) are NOT ignored.
+/data/
+/runs/
 
 # graphify generated knowledge-graph artifacts (rebuild: graphify update .)
 graphify-out/
