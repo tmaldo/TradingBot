@@ -19,7 +19,6 @@ from futures_engine.research.harness import causal_positions, config_hash, sweep
 from futures_engine.research.strategies.momentum import DonchianBreakout
 from futures_engine.trials.logger import TrialLogger
 from futures_engine.validation.splitters import PurgedKFold
-
 from tests.research.conftest import save_snapshot, synthetic_mes_1min
 
 FIXED_TS = datetime(2026, 7, 25, 12, 0, tzinfo=UTC)
@@ -126,7 +125,8 @@ def test_sweep_errored_combo_still_logs_with_error_metric(store, mes_spec) -> No
 def test_sweep_table_has_gross_net_and_delay1_columns(store, mes_spec) -> None:  # type: ignore[no-untyped-def]
     logger = TrialLogger(store._root / "trials.db")  # type: ignore[attr-defined]
     result = _run_sweep(store, mes_spec, logger, {"window": [10, 30]})
-    for col in ("sharpe_gross", "sharpe_net", "sharpe_net_delay1", "n_trades", "win_rate", "max_dd"):
+    expected = ("sharpe_gross", "sharpe_net", "sharpe_net_delay1", "n_trades", "win_rate", "max_dd")
+    for col in expected:
         assert col in result.table.columns
 
 

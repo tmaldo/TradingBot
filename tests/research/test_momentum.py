@@ -48,9 +48,7 @@ def test_donchian_breakout_signal_sequence() -> None:
     closes = [10, 10, 10, 10, 20, 20, 20, 5, 5, 5]
     bars = _bars_from_close([float(c) for c in closes])
     signal = DonchianBreakout().generate(bars, {"window": 3})
-    expected = pd.Series(
-        [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0], index=bars.index
-    )
+    expected = pd.Series([0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0], index=bars.index)
     pd.testing.assert_series_equal(signal, expected, check_names=False)
 
 

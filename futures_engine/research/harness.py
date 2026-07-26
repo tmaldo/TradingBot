@@ -46,7 +46,7 @@ import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, cast, runtime_checkable
 
 import numpy as np
 import pandas as pd
@@ -212,9 +212,14 @@ def _max_drawdown_usd(net: np.ndarray) -> float:
     return float((running_max - equity).max())
 
 
+def _bar_positions(index: pd.Index, timestamps: pd.Series) -> np.ndarray:
+    """Vectorised, hashtable-cached position lookup of trade timestamps in bars."""
+    return index.get_indexer(pd.Index(timestamps))
+
+
 def _delayed_fill_prices_vec(
     trades: pd.DataFrame,
-    index: pd.DatetimeIndex,
+    index: pd.Index,
     opens: np.ndarray,
     spec: InstrumentSpec,
     delay: int,
@@ -230,8 +235,8 @@ def _delayed_fill_prices_vec(
     so the "one delay semantic everywhere" guarantee holds. Callers must ensure
     every fill stays in range (the sweep filters trades that lack ``delay`` room).
     """
-    entry_pos = index.get_indexer(trades["entry_ts"]) + delay
-    exit_pos = index.get_indexer(trades["exit_ts"]) + delay
+    entry_pos = _bar_positions(index, trades["entry_ts"]) + delay
+    exit_pos = _bar_positions(index, trades["exit_ts"]) + delay
     entry_px = opens[entry_pos]
     exit_px = opens[exit_pos]
     sign = np.where(trades["side"].astype(str).str.lower().to_numpy() == "long", 1.0, -1.0)
@@ -270,8 +275,8 @@ def _evaluate(
     net = priced["net_pnl_usd"].to_numpy(dtype=float)
 
     # 1-bar-delay variant: drop trades whose delayed fill would run off the data.
-    entry_pos = index.get_indexer(trades["entry_ts"])
-    exit_pos = index.get_indexer(trades["exit_ts"])
+    entry_pos = _bar_positions(index, trades["entry_ts"])
+    exit_pos = _bar_positions(index, trades["exit_ts"])
     room = np.flatnonzero((entry_pos + 1 < n) & (exit_pos + 1 < n))
     if room.size > 0:
         delayed = apply_costs(
@@ -302,9 +307,9 @@ def config_hash(params: dict[str, Any], cost_cfg: CostConfig, seed: int) -> str:
         "cost_cfg": cost_cfg.model_dump(mode="json"),
         "seed": seed,
     }
-    blob = b"FE-TRIALCFG-v1\n" + json.dumps(
-        payload, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
+    blob = b"FE-TRIALCFG-v1\n" + json.dumps(payload, sort_keys=True, separators=(",", ":")).encode(
+        "utf-8"
+    )
     return hashlib.sha256(blob).hexdigest()
 
 
@@ -396,10 +401,10 @@ def sweep(
             raw = signal.generate(bars, params)
             held = causal_positions(raw)
             trades = positions_to_trades(held, bars, spec, qty)
-            entry_pos = bars.index.get_indexer(trades["entry_ts"])
+            entry_pos = _bar_positions(bars.index, trades["entry_ts"])
             oos_trades = trades.iloc[np.flatnonzero(oos[entry_pos])]
             metrics = _evaluate(oos_trades, bars, spec, cost_cfg)
-        except Exception:  # noqa: BLE001 -- a bad combo must not abort the sweep
+        except Exception:
             metrics = {"error": 1.0}
 
         logger.log(
@@ -425,6 +430,6 @@ def sweep(
         table["error"] = 0.0
     ok = table[table["error"] == 0.0]
     best: dict[str, Any] = (
-        ok.loc[ok["sharpe_net"].idxmax()].to_dict() if not ok.empty else {}
+        cast("dict[str, Any]", ok.loc[ok["sharpe_net"].idxmax()].to_dict()) if not ok.empty else {}
     )
     return SweepResult(table=table, best=best, n_trials_logged=n_logged)
