@@ -19,6 +19,18 @@ dependencies = [
     # Politis-White optimal_block_length used by validation.stats. Pulls scipy
     # transitively (bootstrap internals); we do not import scipy directly.
     "arch>=7",
+    # NOTE: hmmlearn is deliberately NOT a dependency. It ships no Python 3.14
+    # wheel (source build needs a C++ toolchain and is unavailable in CI), and
+    # its public predict/decode API smooths over the whole sequence (non-causal),
+    # which is forbidden for point-in-time labelling. regime.detector therefore
+    # ships a small self-contained Gaussian HMM whose labelling path is a causal
+    # forward filter. See docs/regime-hmm-rationale in regime/detector.py.
+    # ruptures: offline change-point detection used by
+    # regime.detector.ChangePointRegimeDetector. Only its detected breakpoints
+    # are consumed; we drive it in an expanding-window loop so the labelling
+    # path stays point-in-time (each label at t uses bars <= t only). Pulls
+    # scipy transitively. Has Python 3.14 wheels.
+    "ruptures>=1.0",
 ]
 
 [project.optional-dependencies]
@@ -33,6 +45,10 @@ dev = [
     # an independent cross-check of CPCV fold structure in tests (never imported
     # by library code). See task-T3 acceptance: CPCV cross-check.
     "skfolio",
+    # statsmodels: adfuller (Augmented Dickey-Fuller) used ONLY by the frac_diff
+    # test to demonstrate the memory-vs-stationarity trade-off (task-T4
+    # acceptance). Not imported by library code, hence dev-only. Has 3.14 wheels.
+    "statsmodels>=0.14",
 ]
 # Vendor SDKs live in optional extras only -- never in core dependencies (G1/G2).
 # Adapters import these lazily and raise a clear error naming the extra if absent.
@@ -70,4 +86,9 @@ warn_required_dynamic_aliases = true
 # env; they are imported lazily inside adapters only (G2).
 [[tool.mypy.overrides]]
 module = ["databento.*", "norgatedata.*", "yfinance.*"]
+ignore_missing_imports = true
+
+# ruptures ships no type stubs; it is imported by regime.detector only.
+[[tool.mypy.overrides]]
+module = ["ruptures.*"]
 ignore_missing_imports = true
