@@ -6,7 +6,7 @@
 
 **Architecture:** Layered package `futures_engine`: point-in-time data layer (provider adapters → immutable snapshots → continuous contracts) → feature/labeling library (triple-barrier, meta-labeling, regimes) → two-stage backtest stack (vectorized triage → Nautilus Trader event-driven validation, both net-of-costs) → validation statistics (purged CV/CPCV, DSR/PBO, red flags) → prop-survival Monte Carlo → execution layer (OMS, broker adapters, non-overridable kill switches) → single per-run research report with go/no-go verdict. Every evaluated configuration is logged to a trial store that feeds the DSR trial counter.
 
-**Tech Stack:** Python 3.11+, pandas/numpy, LightGBM (+ scikit-learn regularized linear baselines), hmmlearn + ruptures (regimes), vectorbt OSS (or thin internal vectorized harness — see T5), Nautilus Trader (event-driven), databento + norgatedata clients, pydantic v2 + YAML config, pyarrow/parquet storage, pytest (+ hypothesis for property tests), ruff + mypy, Tradovate REST/WS (live, later ProjectX/Rithmic).
+**Tech Stack:** Python 3.12+ (uv-managed vanilla CPython recommended), pandas/numpy, LightGBM (+ scikit-learn regularized linear baselines), hmmlearn + ruptures (regimes; statsmodels Markov-switching acceptable substitute), thin internal vectorized harness for triage (see decision #3), Nautilus Trader (event-driven), `arch` (stationary/block bootstraps + optimal block length), databento + norgatedata clients, pydantic v2 + YAML config, pyarrow/parquet storage, pytest (+ hypothesis for property tests), ruff + mypy, Tradovate + TopstepX REST/WS (live; Rithmic later). skfolio (maintained, sklearn-compatible) as an independent CPCV cross-check in dev/test only.
 
 ## Global Constraints (enforced in every Fable review)
 
@@ -26,7 +26,7 @@ Copied from the research constraints; violations are automatic review rejections
 - **G12** Sizing: volatility-targeted, capped ≤ quarter-Kelly, always dominated by the survival constraint.
 - **G13** Kill switches enforced in the execution layer before orders leave the system; impossible for a strategy to override (strategies never hold a broker client reference). `isAutomated: true` on all automated orders (CME Rule 575).
 - **G14** Backtest–live parity: live broker adapters implement the same `ExecutionClient` interface as backtest execution.
-- **G15** Engineering: Python 3.11+, typed (mypy clean on library code), ruff clean, pydantic-validated config (no magic constants in strategy code), reproducible runs (seed policy, data snapshot hash, config hash, git SHA in a `RunManifest`), all tests offline (recorded fixtures/synthetic data — no network in tests).
+- **G15** Engineering: Python 3.12+ (research floor was 3.11+; raised to match Nautilus Trader's supported 3.12–3.14 window), typed (mypy clean on library code), ruff clean, pydantic-validated config (no magic constants in strategy code), reproducible runs (seed policy, data snapshot hash, config hash, git SHA in a `RunManifest`), all tests offline (recorded fixtures/synthetic data — no network in tests).
 - **G16** Highest-stakes components get the hardest tests: cost model, CV splitters, survival simulator, kill switches.
 
 ## Shared Contracts (authoritative names/signatures — all tasks code against these)
@@ -187,11 +187,14 @@ futures_engine/report/builder.py
 ## Architect decisions already made (do not re-litigate in tasks)
 
 1. **Legacy custom backtester is replaced, not refactored.** `hypotheses.py` is a hit-rate counter with no notion of position, cost, or path; parity-refactoring it would cost more than adopting Nautilus. (Constraint "Fable decides": decided.)
-2. **Nautilus Trader** is the event-driven engine (Windows wheels exist for Py 3.11+). If the T6 implementer hits a hard blocker, escalate to Fable — do not silently substitute.
-3. **vectorbt OSS preferred for T5**; if licensing/API friction proves material, implement a thin internal vectorized harness behind the same `sweep()` interface and document the decision in the self-report. Either way the `sweep()` contract holds.
-4. **Package name `futures_engine`, repo `futures-engine`.** Legacy code stays outside the repo at `C:/Users/tomam/stock_researcher_legacy/` (read-only reference).
-5. **Salvage list** (port, don't import): `indicators.py` (into T4's feature lib), offline-synthetic-test discipline (all tasks), explicit-feature-registry pattern (T4).
-6. **Databento is the primary historical source** (GLBX.MDP3, MES/MNQ, 1-min + daily), **Norgate** for survivorship-free EOD cross-checks. All adapter tests run offline against recorded fixtures; live API calls never occur in CI.
+2. **Nautilus Trader** is the event-driven engine — actively developed (1.227.0 added native continuous-futures support for aggregated bars), official wheels for Python 3.12–3.14 incl. Windows x86_64. Note: Windows wheels are standard-precision (64-bit) only — fine for MES/MNQ price magnitudes; T6 documents this. Our data layer remains authoritative for continuous-contract construction (G3); Nautilus consumes our snapshot bars. If the T6 implementer hits a hard blocker, escalate to Fable — do not silently substitute.
+3. **T5 triage harness is built in-house** (thin vectorized harness behind the `sweep()` contract). vectorbt OSS is in maintenance mode (new features only via community PRs; active development moved to commercial vectorbt PRO) — adopting a large maintenance-mode API for our narrow need (single-instrument bars, float position series, our own cost model and trial logger) is unjustified dependency weight, and correctness is already guaranteed by hand-verified toy cases plus the T6 parity test. vectorbt PRO ($20/mo, closed-source) may be added later as an optional accelerator only if measured sweep runtimes hurt; it must never become the system of record.
+4. **Bootstraps come from `arch`** (Kevin Sheppard; maintained): `StationaryBootstrap`/`CircularBlockBootstrap` + `optimal_block_length` (Politis–White) for T3 Sharpe CIs and T7 trade-level resampling. Well-tested econometrics code beats hand-rolled resamplers; T3/T7 still own the worked-example tests around it.
+5. **CV splitters stay in-house** (label-interval-aware purging needs De Prado (t0,t1) spans; G16 demands we own and test these hardest), but **skfolio** (maintained, sklearn-compatible, has `CombinatorialPurgedCV` with purge/embargo) is a dev-dependency used in T3 tests as an independent cross-check of fold structure where semantics align.
+6. **ProjectX is now TopstepX-exclusive** (licensing to other firms ended 2026-02-28; other prop firms rebuilt on Tradovate/Rithmic stacks). T8 adapter set is therefore: **Tradovate** (MFFU route) implemented fully, **TopstepX** (Topstep route; official gateway API docs) implemented against recorded fixtures to the extent public docs allow, **Rithmic** typed stub. Community SDKs (`project-x-py`, `tsxapi4py`) are reference material only — the risk layer rides on our own thin, fixture-tested adapters. If the user picks their prop firm before Wave 4, that firm's adapter gets implementation priority.
+7. **Package name `futures_engine`, repo `futures-engine`.** Legacy code stays outside the repo at `C:/Users/tomam/stock_researcher_legacy/` (read-only reference).
+8. **Salvage list** (port, don't import): `indicators.py` (into T4's feature lib), offline-synthetic-test discipline (all tasks), explicit-feature-registry pattern (T4).
+9. **Databento is the primary historical source** (GLBX.MDP3, MES/MNQ, 1-min + daily), **Norgate** for survivorship-free EOD cross-checks. All adapter tests run offline against recorded fixtures; live API calls never occur in CI.
 
 ---
 
@@ -219,7 +222,7 @@ Serialization: T1 before T4/T5/T6 (data schemas), T2 before T5/T7 (costs/rules),
 **Interfaces:** Produces `InstrumentSpec`, `RunManifest`, `TrialLogger`, pydantic `Settings` loader (YAML → validated models; unknown keys rejected). Consumes nothing.
 
 **Acceptance criteria:**
-- [ ] `pip install -e .[dev]` works on Windows, Python 3.11+; ruff + mypy clean; pytest green offline.
+- [ ] `pip install -e .[dev]` works on Windows, Python 3.12+; ruff + mypy clean; pytest green offline.
 - [ ] Config: loading `configs/instruments.yaml` yields `InstrumentSpec` for MES/MNQ with correct tick economics; invalid/unknown keys raise validation errors (tested).
 - [ ] TrialLogger: append-only (no update/delete API); `count()` correct across process restarts; concurrent writes safe (tested with threads); every record requires `data_snapshot_hashes`, `config_hash`, `seed`, `git_sha` — missing fields rejected (tested).
 - [ ] `RunManifest` round-trips to JSON; manifest creation pulls git SHA from the repo.
@@ -264,7 +267,8 @@ Serialization: T1 before T4/T5/T6 (data schemas), T2 before T5/T7 (costs/rules),
 - [ ] CPCV: all C(n_groups, n_test) combinations produced; per López de Prado — number of paths and group assignments verified for a small case by hand in tests.
 - [ ] `deflated_sharpe`: reproduces a published worked example within tolerance; monotone decreasing in n_trials (property test).
 - [ ] `pbo`: symmetric-noise sanity check → PBO ≈ 0.5 on pure noise (statistical tolerance, seeded); ≈ 0 for a genuinely dominant config.
-- [ ] `bootstrap_sharpe_ci`: stationary block bootstrap; seeded/reproducible; coverage sanity test on synthetic iid returns.
+- [ ] `bootstrap_sharpe_ci`: stationary block bootstrap via `arch.bootstrap` (`StationaryBootstrap`; block size defaulting to `optimal_block_length`, overridable); seeded/reproducible; coverage sanity test on synthetic iid returns.
+- [ ] CPCV cross-check: for an index-purging-compatible configuration, fold assignments agree with skfolio's `CombinatorialPurgedCV` (dev-dependency, test-only); documented divergences only where label-interval purging is stricter.
 - [ ] `red_flags`: fires on Sharpe > 3; win rate > 70% with smooth equity (definition: max drawdown < k·vol, k in config); edge that vanishes with delay/costs (compares provided delayed/gross variants); each flag has its own test.
 - [ ] Leakage regression test: walk-forward with `purge=True` shows measurably lower (or equal) skill than unpurged on an overlapping-label synthetic dataset engineered to leak — this test documents the legacy bug (AUDIT §2.5) and prevents its return.
 
@@ -319,7 +323,7 @@ Serialization: T1 before T4/T5/T6 (data schemas), T2 before T5/T7 (costs/rules),
 **Interfaces:** Consumes T2 (`PropRuleSet`, `simulate_account`), TradeLogs from T6 (or any conforming TradeLog). Produces `monte_carlo_survival`, `SurvivalReport`, `position_size`, `SizingConfig` (consumed by T8 RiskManager and T9 report).
 
 **Acceptance criteria (G16):**
-- [ ] Trade-level **block bootstrap** (preserves autocorrelation; block size configurable) over the strategy's TradeLog; intraday mark-to-market path approximated from trade MAE/MFE when available, documented when not.
+- [ ] Trade-level **block bootstrap** via `arch.bootstrap` (preserves autocorrelation; block size configurable, default from `optimal_block_length`) over the strategy's TradeLog; intraday mark-to-market path approximated from trade MAE/MFE when available, documented when not.
 - [ ] Seeded and reproducible; n_paths configurable; 90% CI on p_survival reported (G11).
 - [ ] Validation against analytically known cases: (a) all-winning trades → p_survival = 1; (b) deterministic loss sequence that busts → 0; (c) simple random walk vs closed-form gambler's-ruin approximation within tolerance.
 - [ ] Sizing interaction: exposes `contracts` sweep so the report can show survival vs size; test that p_survival is monotone non-increasing in contract count for fixed rules.
@@ -328,7 +332,7 @@ Serialization: T1 before T4/T5/T6 (data schemas), T2 before T5/T7 (costs/rules),
 
 ### Task T8: Execution & risk layer
 
-**Files:** Create `futures_engine/execution/{client,oms,risk,reconcile,monitor}.py`, `futures_engine/execution/adapters/{tradovate,projectx_stub,rithmic_stub}.py`, `configs/live.yaml` (incl. shutdown criteria), `tests/execution/…`.
+**Files:** Create `futures_engine/execution/{client,oms,risk,reconcile,monitor}.py`, `futures_engine/execution/adapters/{tradovate,topstepx,rithmic_stub}.py`, `configs/live.yaml` (incl. shutdown criteria), `tests/execution/…`.
 
 **Interfaces:** Consumes shared `ExecutionClient` contract (T6), T2 rules, T7 `position_size`/`SizingConfig`, T0 config. Produces the live **market-data handler** (Tradovate WS feed → normalized ticks/bars driving strategy + staleness clock), OMS, `RiskManager` (which also enforces that order qty ≤ current `position_size` output), Tradovate adapter (paper/demo endpoints), reconciler, monitoring hooks (rolling live-vs-backtest slippage, fill quality, rolling Sharpe, drift stats). Live event flow: market data handler → strategy engine → OMS → RiskManager → ExecutionClient, with state persistence at each hop.
 
@@ -338,7 +342,7 @@ Serialization: T1 before T4/T5/T6 (data schemas), T2 before T5/T7 (costs/rules),
 - [ ] Idempotency: duplicate `client_order_id` submits are no-ops; crash-restart replays outbox without double-sending (state persistence tested with a kill-restart simulation).
 - [ ] Reconciliation: on reconnect, broker-state fixture differing from local state (extra fill, missed fill, position mismatch) is detected and corrected; each mismatch class tested.
 - [ ] Every outbound order has `is_automated=True` (CME 575) — asserted in adapter serialization tests.
-- [ ] Tradovate adapter tested against recorded HTTP/WS fixtures only (no network in CI); ProjectX/Rithmic are typed stubs raising `NotImplementedError` with the interface in place.
+- [ ] Tradovate adapter tested against recorded HTTP/WS fixtures only (no network in CI); TopstepX adapter typed and fixture-tested to the extent public gateway docs allow (decision #6); Rithmic is a typed stub raising `NotImplementedError` with the interface in place.
 - [ ] Shutdown criteria (max live-vs-backtest slippage divergence, rolling-Sharpe floor, drift thresholds) read from `configs/live.yaml`, not code (constraint: shutdown criteria in config).
 
 ### Task T9: Reporting, end-to-end pipeline, README
