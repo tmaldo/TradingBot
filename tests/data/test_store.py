@@ -107,6 +107,26 @@ def test_hash_reflects_essential_meta(tmp_path: Path) -> None:
     assert base != other_source
 
 
+# --- optional open_interest column ------------------------------------------
+
+
+def _bars_with_oi(closes: list[float], oi: list[float]) -> pd.DataFrame:
+    frame = _bars(closes)
+    frame["open_interest"] = oi
+    return frame
+
+
+def test_open_interest_round_trips_and_participates_in_hash(tmp_path: Path) -> None:
+    store = SnapshotStore(tmp_path)
+    bars = _bars_with_oi([1.0, 2.0, 3.0], [10.0, 20.0, 30.0])
+    h = store.save(bars, _meta())
+    loaded, _ = store.load(h)
+    pd.testing.assert_frame_equal(loaded, bars)
+    # mutating open interest changes the content hash
+    mutated = _bars_with_oi([1.0, 2.0, 3.0], [10.0, 20.0, 31.0])
+    assert store.content_hash(mutated, _meta()) != store.content_hash(bars, _meta())
+
+
 # --- save / load round-trip & immutability ----------------------------------
 
 

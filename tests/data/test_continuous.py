@@ -87,6 +87,32 @@ def test_calendar_rolls_before_expiry(continuous_fixture) -> None:
         assert (expiry - roll).days >= DEFAULT_CALENDAR_OFFSET_DAYS
 
 
+def test_calendar_roll_snaps_past_holiday() -> None:
+    """When expiry - offset business days lands on a non-trading day, the roll
+    snaps back to the last session both contracts trade."""
+    # Sessions Mon 2024-03-04 .. Fri 2024-03-15 with 2024-03-11 (the nominal
+    # 4-business-day-before-expiry target) removed as a holiday.
+    all_days = pd.bdate_range("2024-03-04", "2024-03-15", tz="UTC")
+    sessions = pd.DatetimeIndex([d for d in all_days if d.date() != date(2024, 3, 11)])
+    close = pd.Series(range(len(sessions)), index=sessions, dtype="float64") + 100.0
+
+    def frame(offset: float) -> pd.DataFrame:
+        c = close + offset
+        return pd.DataFrame(
+            {"open": c, "high": c + 1, "low": c - 1, "close": c, "volume": 1000.0},
+            index=sessions,
+        )
+
+    per_contract = {"FRONT": frame(0.0), "BACK": frame(10.0)}
+    specs = [
+        ContractInfo(symbol="FRONT", expiry=date(2024, 3, 15), first_trade=date(2024, 3, 4)),
+        ContractInfo(symbol="BACK", expiry=date(2024, 6, 21), first_trade=date(2024, 3, 4)),
+    ]
+    _, meta = build_continuous(per_contract, specs, "calendar", "none", calendar_offset_days=4)
+    # target 2024-03-11 is a holiday -> snap back to Fri 2024-03-08
+    assert meta.roll_dates == [date(2024, 3, 8)]
+
+
 def test_first_roll_spans_dst_change(continuous_fixture) -> None:
     """The MESH24->MESM24 overlap straddles the 2024-03-10 US DST change."""
     bars, meta = build_continuous(
