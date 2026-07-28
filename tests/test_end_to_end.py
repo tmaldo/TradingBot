@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 
 from futures_engine.pipeline.run import run_pipeline
 
@@ -77,6 +78,40 @@ def test_verdict_json_is_consistent(outcome) -> None:  # type: ignore[no-untyped
     assert data["decision"] == "NO-GO"
     names = {g["name"] for g in data["gates"]}
     assert names == {"survival", "deflated_sharpe", "pbo", "no_fail_flags"}
+
+
+def test_mismatched_strategy_family_does_not_zero_dsr_count(tmp_path: Path) -> None:
+    """G10 regression: a config ``strategy_family`` that disagrees with the signal's
+    own family must NOT silently collapse the honest DSR trial count to 0.
+
+    The sweep logs each trial under ``signal.family`` (``trend_momentum`` for the
+    donchian_breakout demo). Before the fix, the DSR count was
+    ``logger.count(cfg.strategy_family)`` -- so a bogus config family returned 0
+    trials, DSR 0.0, and a fake statistical NO-GO. The count is now derived from
+    the signal, so it is correct regardless of the config string.
+    """
+    cfg = yaml.safe_load((_DEMO / "config.yaml").read_text(encoding="utf-8"))
+    cfg["strategy_family"] = "totally_wrong_family_xyz"  # disagrees with signal.family
+    bogus = tmp_path / "config.yaml"
+    bogus.write_text(yaml.safe_dump(cfg), encoding="utf-8")
+    out = tmp_path / "reports"
+    out.mkdir()
+
+    outcome = run_pipeline(
+        bogus,
+        settings_dir=_CONFIGS,
+        snapshot_root=_SNAPSHOTS,
+        out_dir=out,
+        repo=_REPO,
+    )
+
+    # Correct count regardless of the (mismatched) config string -- not a silent 0.
+    assert outcome.n_trials == 8
+    md = (outcome.run_dir / "report.md").read_text(encoding="utf-8")
+    assert f"**{outcome.n_trials}**" in md
+    # The report labels the family from the signal, not the stale config value.
+    assert "totally_wrong_family_xyz" not in md
+    assert "trend_momentum" in md
 
 
 def test_run_is_deterministic(tmp_path: Path) -> None:

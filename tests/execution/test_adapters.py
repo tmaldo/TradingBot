@@ -204,7 +204,8 @@ def test_rithmic_is_execution_client_type() -> None:
     assert isinstance(RithmicExecutionClient(), ExecutionClient)
 
 
-def test_rithmic_methods_raise_not_implemented() -> None:
+def test_rithmic_trading_methods_raise_not_implemented() -> None:
+    # The trading methods remain an intentional typed stub: they must still raise.
     adapter = RithmicExecutionClient()
     with pytest.raises(NotImplementedError):
         adapter.submit(_order())
@@ -214,7 +215,25 @@ def test_rithmic_methods_raise_not_implemented() -> None:
         adapter.positions()
     with pytest.raises(NotImplementedError):
         adapter.account()
+
+
+def test_rithmic_callback_registration_is_noop() -> None:
+    # on_disconnect / on_data_stale are deliberate no-ops (not raising) so the
+    # stub can be mounted in a RiskManager, which wires them on construction.
+    adapter = RithmicExecutionClient()
+    assert adapter.on_disconnect(lambda: None) is None
+    assert adapter.on_data_stale(lambda: None) is None
+
+
+def test_rithmic_stub_can_mount_in_risk_manager(
+    live_config: Any, prop_rules: Any, spec: Any
+) -> None:
+    # Regression: RiskManager.__init__ calls client.on_disconnect / on_data_stale,
+    # so constructing one with the typed stub must not raise.
+    from futures_engine.execution.risk import RiskManager
+
+    rm = RiskManager(RithmicExecutionClient(), live_config, prop_rules, spec)
+    assert rm is not None
+    # ...and the other stub methods are still unimplemented.
     with pytest.raises(NotImplementedError):
-        adapter.on_disconnect(lambda: None)
-    with pytest.raises(NotImplementedError):
-        adapter.on_data_stale(lambda: None)
+        RithmicExecutionClient().submit(_order())

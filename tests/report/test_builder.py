@@ -154,6 +154,55 @@ def test_build_report_writes_artifacts_and_honest_trial_count(tmp_path: Path) ->
         assert token in md
     assert "Verdict:" in html
     assert "config hash" in md
+    # FIX 3(a): the "Costs applied" table (present in Markdown) now also renders in HTML.
+    assert "Costs applied" in md
+    assert "Costs applied" in html
+    assert "commission / side" in html
+
+
+def test_html_costs_table_and_escaping(tmp_path: Path) -> None:
+    """FIX 3: HTML gets the costs table, no stray Reproducibility 'delay bars' row,
+    and interpolated run_id / strategy_family / red-flag messages are HTML-escaped."""
+    from futures_engine.report.builder import ReportBundle, render_html
+    from futures_engine.validation.stats import RedFlag
+
+    net = _returns(0.0002, seed=11)
+    result = _result(net)
+    bundle = compute_bundle(
+        "run<&>id",
+        _logger_with_trials(tmp_path, n=5),
+        _survival(0.8),
+        result,
+        GateConfig(),
+        gross=_FakeResult(net, result.equity, _metrics(_returns(0.0003, seed=12))),
+        delayed=_FakeResult(net, result.equity, _metrics(net)),
+        perf_matrix=np.random.default_rng(0).normal(0.0, 1.0, size=(4, 8)),
+        strategy_family="fam<script>",
+        cv_scheme="cv",
+        bootstrap_n=100,
+    )
+    # Inject a red flag with markup in its message to prove escaping.
+    flagged = ReportBundle(
+        **{
+            **bundle.__dict__,
+            "red_flags": [
+                RedFlag(code="edge_decay", severity="warn", message="drop <b>50%</b> & rising")
+            ],
+        }
+    )
+    html_out = render_html(flagged, _COST)
+
+    # Costs table present in HTML with the delay-bars row living there now.
+    costs_idx = html_out.index("Costs applied")
+    assert "delay bars" in html_out[costs_idx:]
+    # The Reproducibility section (after costs) no longer carries a stray delay-bars row.
+    repro_idx = html_out.index("Reproducibility")
+    assert "delay bars" not in html_out[repro_idx:]
+    # Defensive HTML escaping of interpolated values.
+    assert "run&lt;&amp;&gt;id" in html_out
+    assert "fam&lt;script&gt;" in html_out
+    assert "drop &lt;b&gt;50%&lt;/b&gt; &amp; rising" in html_out
+    assert "<script>" not in html_out
 
 
 def test_bundle_dsr_uses_logger_count_not_hardcoded(tmp_path: Path) -> None:

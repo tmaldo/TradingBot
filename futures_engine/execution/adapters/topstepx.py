@@ -91,6 +91,10 @@ class TopstepXExecutionClient:
         self._require_success(resp)
         acct = next(a for a in resp["accounts"] if int(a["id"]) == self._cfg.account_id)
         balance = float(acct["balance"])
+        # equity == balance (no open-PnL term) because the public ProjectX
+        # /api/Account/search schema exposes no live PnL field, unlike Tradovate's
+        # equity = cash + totalPnL. Equity may under/overstate open exposure until a
+        # PnL source is wired; documented doc-limitation, not a modelling choice.
         return AccountState(balance=balance, equity=balance, positions=self.positions())
 
     def on_disconnect(self, cb: Callable[[], None]) -> None:

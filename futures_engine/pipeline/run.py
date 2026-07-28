@@ -84,6 +84,9 @@ class PipelineConfig(BaseModel):
     run_id: str = Field(min_length=1)
     instrument: str = Field(min_length=1)
     signal: str = Field(min_length=1)
+    # Display/label only: the honest DSR trial count is sourced from the signal's
+    # own ``.family`` (see run_pipeline), never this field, so a stale value here
+    # cannot silently zero the count.
     strategy_family: str = Field(min_length=1)
     grid: dict[str, list[int]]
     snapshot_hash: str = Field(min_length=1)
@@ -266,6 +269,15 @@ def run_pipeline(
     # separate logger and must not inflate the deflation benchmark.
     logger = TrialLogger(out_path / f"{cfg.run_id}.trials.db")
     signal = SIGNAL_REGISTRY[cfg.signal]()
+    # G10 (honest DSR): the trial count MUST be sourced from the SIGNAL's own
+    # family, which is exactly the family the sweep logs each trial under (the
+    # harness logs ``strategy_family=signal.family``). Deriving it here -- rather
+    # than trusting the independently-supplied ``cfg.strategy_family`` -- makes the
+    # logged family and ``logger.count(...)`` identical by construction, so a
+    # mismatched config field can never silently collapse the count to 0 and fake
+    # a statistical NO-GO. ``cfg.strategy_family`` is retained as a display/label
+    # field only.
+    strategy_family = signal.family
     splitter = PurgedKFold(n_splits=cfg.n_splits, embargo_frac=cfg.embargo_frac)
     sweep_result = run_sweep(
         signal,
@@ -310,7 +322,7 @@ def run_pipeline(
         gross=cast("BacktestResultLike", gross),
         delayed=cast("BacktestResultLike", delayed),
         perf_matrix=perf,
-        strategy_family=cfg.strategy_family,
+        strategy_family=strategy_family,
         cv_scheme=_cv_scheme(splitter),
         cost_cfg=cost_cfg,
         pbo_partitions=cfg.pbo_partitions,
@@ -322,6 +334,6 @@ def run_pipeline(
         run_id=cfg.run_id,
         run_dir=run_dir,
         verdict=verdict,
-        n_trials=logger.count(cfg.strategy_family),
+        n_trials=logger.count(strategy_family),
         best_params=best_params,
     )
