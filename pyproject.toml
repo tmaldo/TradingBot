@@ -36,6 +36,13 @@ dependencies = [
     # meta-model is a first-class part of the research stage, not an optional extra.
     "scikit-learn>=1.5",
     "lightgbm>=4.3",
+    # nautilus_trader is the event-driven SEQUENCER for the T6 validation
+    # backtester (and, later, the live layer): it runs the order/position state
+    # machine while T2 (costs.model) remains the single source of truth for all
+    # fills and costs (fee_model is wired to ZERO; fill prices come from
+    # delayed_fill_prices). Core dep -- the event-driven backtest is a
+    # first-class part of the pipeline. Ships a cp314 wheel; installs on 3.12-3.14.
+    "nautilus_trader>=1.230",
 ]
 
 [project.optional-dependencies]
@@ -71,6 +78,12 @@ packages = ["futures_engine"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+filterwarnings = [
+    # nautilus_trader 1.230 calls the pandas-3.0-deprecated Timestamp.utcnow
+    # internally during BacktestEngine.run(); third-party and outside our control.
+    # Scoped to this exact message so our own deprecations still surface.
+    "ignore:Timestamp.utcnow is deprecated:",
+]
 
 # mypy: strict on library code only (futures_engine/). Tests are intentionally
 # excluded from the strict gate (they use fixtures/monkeypatching that add noise
@@ -98,4 +111,12 @@ ignore_missing_imports = true
 # libraries without loosening the strict gate elsewhere.
 [[tool.mypy.overrides]]
 module = ["ruptures.*", "lightgbm.*", "sklearn.*", "joblib.*"]
+ignore_missing_imports = true
+
+# nautilus_trader (the T6 event sequencer) is a large Cython package that ships no
+# complete mypy stubs; ignore missing imports for it without loosening the strict
+# gate elsewhere. Backtest-package subclasses of its Cython bases carry a local
+# `type: ignore[misc]` where they must inherit from an `Any`-typed base.
+[[tool.mypy.overrides]]
+module = ["nautilus_trader.*"]
 ignore_missing_imports = true
