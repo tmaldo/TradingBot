@@ -1,0 +1,76 @@
+# Live execution & risk configuration (task T8, Global Constraints G13/G15).
+#
+# Validated by futures_engine.execution.live_config.LiveConfig (extra="forbid":
+# a typo fails loudly). EVERY threshold the risk layer and the shutdown monitor
+# use lives here -- there are NO magic numbers in the execution code (G15).
+#
+# The kill-switch *buffers/margins/rates* are here; the underlying prop-firm
+# daily-loss and trailing-drawdown AMOUNTS come from configs/prop_rules.yaml via
+# the referenced `account.prop_preset` (single source of truth for firm rules).
+
+account:
+  # Starting equity of the live/demo account (USD). Also the daily anchor at the
+  # first session open before the first end-of-day roll.
+  starting_balance: 50000.0
+  # Preset name in configs/prop_rules.yaml supplying the firm's daily-loss limit
+  # and trailing-drawdown mechanics the kill switches guard against.
+  prop_preset: topstep_50k
+
+risk:
+  kill_switches:
+    # Reject (and flatten) once the day's loss comes within `buffer_usd` of the
+    # firm's daily loss limit -- we stop early, never touching the hard limit.
+    daily_loss_limit:
+      buffer_usd: 150.0
+    # Reject once account equity comes within `margin_usd` of the trailing-DD floor.
+    trailing_dd_guard:
+      margin_usd: 250.0
+    # Halt + flatten if no fresh market-data tick has arrived within `max_age_s`.
+    stale_data_halt:
+      max_age_s: 5.0
+    # On a websocket drop: queue a flatten for reconnect and raise an alarm.
+    flatten_on_disconnect:
+      alarm: true
+    # Reject bursts above `max_per_minute` new orders (rolling 60s window).
+    max_order_rate:
+      max_per_minute: 10
+  # Inputs to the T7 sizer (futures_engine.sizing.position.position_size); the
+  # RiskManager rejects any order whose qty exceeds this computed contract count.
+  sizing:
+    vol_estimate_usd: 100.0        # per-contract daily P&L stdev (USD)
+    target_daily_vol_usd: 1500.0   # daily risk budget (USD, ~3% of a 50K account)
+    kelly_fraction_cap: 0.25       # quarter-Kelly ceiling (G12)
+    max_contracts: 20              # hard venue/margin ceiling
+    survival_max_contracts: 15     # largest size passing the survival gate (T7)
+    # MES-scale edge (~$50 avg loss / $100 avg win per contract). With quarter-Kelly
+    # the binding leg here is Kelly -> a cap of 3 contracts (see test_kill_switches).
+    edge:
+      p_win: 0.60
+      avg_win: 100.0
+      avg_loss: 50.0
+
+# Shutdown criteria (NOT in code, G15). The live monitor compares rolling live
+# statistics to these and signals an orderly shutdown when any is breached.
+shutdown:
+  # Max rolling mean |live_fill - backtest_fill| (USD) before we distrust fills.
+  max_slippage_divergence_usd: 40.0
+  # Rolling realised Sharpe must stay at or above this floor once enough samples.
+  rolling_sharpe_floor: 0.25
+  rolling_sharpe_min_samples: 20
+  rolling_window: 50
+  # Absolute drift z-score (live-vs-backtest metric divergence) that trips shutdown.
+  drift_threshold_z: 3.0
+
+adapters:
+  # Tradovate DEMO/paper endpoints (MFFU route). No live calls are ever made in
+  # CI; the adapter is driven by recorded fixtures. These are configuration only.
+  tradovate:
+    base_url: https://demo.tradovateapi.com/v1
+    ws_url: wss://demo.tradovateapi.com/v1/websocket
+    account_spec: MFFU_DEMO
+    account_id: 1000001
+  # TopstepX / ProjectX gateway DEMO endpoint (typed + fixture-tested to the
+  # extent the public gateway docs allow).
+  topstepx:
+    base_url: https://gateway-api-demo.s2f.projectx.com
+    account_id: 2000002
