@@ -61,6 +61,20 @@ def _trades(net_pnls: list[float]) -> pd.DataFrame:
     )
 
 
+def _trades_mae_mfe(
+    net_pnls: list[float], mae_usd: list[float], mfe_usd: list[float]
+) -> pd.DataFrame:
+    """A TradeLog carrying per-trade excursion columns (``mae_usd`` <= 0, ``mfe_usd`` >= 0).
+
+    These widen each resampled day's intraday_min/max in the survival simulator, so
+    they matter only for the ``intraday_unrealized`` trailing mode.
+    """
+    frame = _trades(net_pnls)
+    frame["mae_usd"] = mae_usd
+    frame["mfe_usd"] = mfe_usd
+    return frame
+
+
 # --- analytic case (a): all-winning trades -> p_survival == 1.0 --------------
 
 
@@ -231,3 +245,150 @@ def test_max_contracts_surviving_returns_zero_when_one_lot_fails() -> None:
         max_search=8,
     )
     assert n == 0
+
+
+# --- intraday_unrealized trailing mode WITH MAE/MFE excursions (G11) ----------
+
+
+def test_intraday_unrealized_mae_widening_busts_where_eod_survives() -> None:
+    # Every trade closes at +50 (a *win*), so in ``eod`` mode the account only ever
+    # gains and never busts. But each trade digs an intraday trough of -2500 (MAE)
+    # and a peak of +200 (MFE); against a 2,000 trailing drawdown the intraday LOW
+    # equity breaches the floor on day 1 of every path. This exercises the MAE/MFE
+    # widening in _build_days and the aligned mae/mfe resampling, and proves the
+    # intraday machinery -- not the realized close -- is what triggers the bust.
+    trades = _trades_mae_mfe([50.0] * 6, mae_usd=[-2_500.0] * 6, mfe_usd=[200.0] * 6)
+
+    eod = monte_carlo_survival(
+        trades,
+        _rules(trailing_mode="eod", trailing_dd=2_000.0, profit_target=1e12),
+        contracts=1,
+        n_paths=200,
+        horizon_days=20,
+        seed=13,
+    )
+    assert eod.p_survival == 1.0  # closes-only view: all wins, never busts
+    assert eod.bust_reasons == {}
+
+    intraday = monte_carlo_survival(
+        trades,
+        _rules(trailing_mode="intraday_unrealized", trailing_dd=2_000.0, profit_target=1e12),
+        contracts=1,
+        n_paths=200,
+        horizon_days=20,
+        seed=13,
+    )
+    assert intraday.p_survival == 0.0  # intraday trough breaches the floor day 1
+    assert intraday.bust_reasons == {"trailing_drawdown": 1.0}
+
+
+# --- intraday_unrealized trailing mode WITHOUT MAE/MFE (realized-only fallback) ---
+
+
+def test_intraday_unrealized_realized_only_fallback_survives_all_wins() -> None:
+    # No mae_usd/mfe_usd columns: _build_days falls back to realized-only intraday
+    # extremes (intraday_min = min(0, cum), intraday_max = max(0, cum)). For a stream
+    # of winning trades that means no intraday downside, so intraday_unrealized cannot
+    # breach the floor -- p_survival == 1.0. This pins the realized-only branch and
+    # contrasts directly with the MAE-widening test above (same winning closes -> 0.0).
+    report = monte_carlo_survival(
+        _trades([100.0, 150.0, 200.0, 120.0, 180.0]),
+        _rules(trailing_mode="intraday_unrealized", trailing_dd=2_000.0, profit_target=1e12),
+        contracts=1,
+        n_paths=200,
+        horizon_days=20,
+        seed=17,
+    )
+    assert report.p_survival == 1.0
+    assert report.bust_reasons == {}
+
+
+def test_intraday_unrealized_realized_only_fallback_busts_on_losses() -> None:
+    # Realized-only fallback again, but a deterministic losing stream: every resampled
+    # trade is -600, so in intraday_unrealized mode the intraday low equals the close
+    # and the balance grinds through the 2,000 floor on every path. Known answer: no
+    # path survives, and the only bust reason is the trailing drawdown.
+    report = monte_carlo_survival(
+        _trades([-600.0] * 6),
+        _rules(trailing_mode="intraday_unrealized", trailing_dd=2_000.0),
+        contracts=1,
+        n_paths=200,
+        horizon_days=40,
+        seed=19,
+    )
+    assert report.p_survival == 0.0
+    assert report.bust_reasons == {"trailing_drawdown": 1.0}
+
+
+# --- daily_loss_limit (G11) --------------------------------------------------
+# NOTE: per T2 (futures_engine/prop/rules.py) the daily loss limit is a *soft* rule
+# -- it caps a day's realized loss and is "never a bust by itself", so it produces
+# no bust_reasons key. We therefore assert its real, observable effect on survival
+# (a bust_reasons-key assertion would test behaviour that T2 deliberately does not
+# implement).
+
+
+def test_daily_loss_limit_caps_losses_and_prevents_a_bust() -> None:
+    # Every trade is -1,500 against a 2,000 trailing drawdown over a 2-day horizon.
+    # Without a daily loss limit the account is 50,000 -> 48,500 -> 47,000, breaching
+    # the 48,000 floor on day 2 (p_survival == 0). With a 500 daily loss limit each
+    # day's loss is capped at -500 (50,000 -> 49,500 -> 49,000), so both days clear
+    # the floor and every path survives the horizon (p_survival == 1). This pins the
+    # _capped_realized path driven by daily_loss_limit.
+    trades = _trades([-1_500.0] * 6)
+
+    uncapped = monte_carlo_survival(
+        trades,
+        _rules(trailing_dd=2_000.0, daily_loss_limit=None),
+        contracts=1,
+        n_paths=200,
+        horizon_days=2,
+        seed=23,
+    )
+    assert uncapped.p_survival == 0.0
+    assert uncapped.bust_reasons == {"trailing_drawdown": 1.0}
+
+    capped = monte_carlo_survival(
+        trades,
+        _rules(trailing_dd=2_000.0, daily_loss_limit=500.0),
+        contracts=1,
+        n_paths=200,
+        horizon_days=2,
+        seed=23,
+    )
+    assert capped.p_survival == 1.0
+    assert capped.bust_reasons == {}
+
+
+# --- consistency_max_day_pct (G11) -------------------------------------------
+# NOTE: per T2 the consistency rule is a *payout gate*, not a bust condition -- when
+# violated the account simply has not passed yet and keeps trading. So it too emits
+# no bust_reasons key; we assert its real effect on whether the target is booked.
+
+
+def test_consistency_rule_blocks_the_target_until_diluted() -> None:
+    # Identical +1,000 winning trades; profit target 1,000 is reached on day 1. With a
+    # 50% consistency cap the day-1 profit is 100% of total profit (> 50%), so the pass
+    # is withheld: over a 1-day horizon no path books the target even though all survive
+    # (p_target_before_bust == 0, p_survival == 1). Without the consistency cap the same
+    # day-1 profit passes immediately (p_target_before_bust == 1). This exercises the
+    # consistency branch of _passes.
+    trades = _trades([1_000.0] * 6)
+    common = dict(contracts=1, n_paths=200, horizon_days=1, seed=29)
+
+    blocked = monte_carlo_survival(
+        trades,
+        _rules(profit_target=1_000.0, min_trading_days=1, consistency_max_day_pct=0.5),
+        **common,
+    )
+    assert blocked.p_survival == 1.0
+    assert blocked.p_target_before_bust == 0.0
+    assert blocked.median_days_to_target is None
+
+    allowed = monte_carlo_survival(
+        trades,
+        _rules(profit_target=1_000.0, min_trading_days=1, consistency_max_day_pct=None),
+        **common,
+    )
+    assert allowed.p_target_before_bust == 1.0
+    assert allowed.median_days_to_target == 1.0
