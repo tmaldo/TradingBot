@@ -164,6 +164,11 @@ class BacktestExecutionClient:
         self._closes = bars["close"].to_numpy(dtype=float)
         self._disconnect_cbs: list[Callable[[], None]] = []
         self._stale_cbs: list[Callable[[], None]] = []
+        # Fill log: (signal-bar timestamp, fill price, signed filled qty) for every
+        # accepted fill. The signal bar is the clock bar; the price is the bar the
+        # fill actually landed on (clock + delay). Used to lock this client's
+        # bar-open/delay/netting arithmetic against the runner's path (G14).
+        self._fills: list[tuple[pd.Timestamp, float, int]] = []
 
     # --- clock ---------------------------------------------------------------
 
@@ -194,6 +199,7 @@ class BacktestExecutionClient:
 
         signed = order.qty if order.side == "buy" else -order.qty
         self._apply_fill(signed, fill_px)
+        self._fills.append((self._bars.index[self._clock_pos], fill_px, signed))
         return OrderAck(order.client_order_id, accepted=True, reason=None)
 
     def cancel(self, client_order_id: str) -> None:
@@ -219,6 +225,10 @@ class BacktestExecutionClient:
     def on_data_stale(self, cb: Callable[[], None]) -> None:
         """Store ``cb`` (never fired in the deterministic backtest)."""
         self._stale_cbs.append(cb)
+
+    def fills(self) -> pd.DataFrame:
+        """The fill log as a frame: ``signal_ts`` (clock bar), ``fill_px``, ``qty`` (signed)."""
+        return pd.DataFrame(self._fills, columns=["signal_ts", "fill_px", "qty"])
 
     # --- internals -----------------------------------------------------------
 

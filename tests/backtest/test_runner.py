@@ -27,7 +27,7 @@ from futures_engine.data.store import DataIntegrityError, SnapshotStore
 from futures_engine.research.harness import causal_positions
 from futures_engine.trials.logger import TrialLogger
 from futures_engine.validation.stats import BacktestResultLike, red_flags
-from tests.backtest.conftest import save_snapshot
+from tests.backtest.conftest import save_snapshot, trending_mes_1min
 
 _STRATEGY = StrategyConfig(signal="donchian_breakout", params={"window": 20}, qty=1, seed=42)
 _COST = CostConfig(
@@ -40,6 +40,45 @@ _COST = CostConfig(
     delay_bars=1,
 )
 _CREATED = pd.Timestamp("2026-07-27T00:00:00Z").to_pydatetime()
+
+_COST_BASE = {
+    "commission_per_side_usd": 0.35,
+    "exchange_fee_per_side_usd": 0.37,
+    "nfa_fee_per_side_usd": 0.02,
+    "spread_ticks": 1.0,
+    "slippage": "fixed_ticks",
+    "slippage_ticks": 0.5,
+}
+
+
+def _total_net(result: object) -> float:
+    trades = result.trades  # type: ignore[attr-defined]
+    return 0.0 if trades.empty else float(trades["net_pnl_usd"].sum())
+
+
+def test_runner_delay_one_is_worse_or_equal_on_trend(
+    store: SnapshotStore, logger: TrialLogger, mes_spec: InstrumentSpec
+) -> None:
+    # Runner-level (full BacktestResult) closure of the mechanism-vs-strategy gap:
+    # on a clean up-trend the reference strategy is long-and-hold to the data edge;
+    # a 1-bar delay pushes that held-to-edge position's tail fill off the data, so
+    # the trade is dropped and the aggregate result is strictly worse. Deterministic
+    # on this fixture (no seed sensitivity), complementing the single-jump mechanism
+    # test in test_fill_model.py.
+    bars = trending_mes_1min(1500, slope=0.5)
+    snap = save_snapshot(store, bars, validation_grade=True, continuous=True)
+    strat = StrategyConfig(signal="donchian_breakout", params={"window": 20}, qty=1, seed=1)
+    runner = BacktestRunner(store, logger)
+    r0 = runner.run(
+        snap, strat, CostConfig(**_COST_BASE, delay_bars=0), mes_spec, created_at=_CREATED
+    )
+    r1 = runner.run(
+        snap, strat, CostConfig(**_COST_BASE, delay_bars=1), mes_spec, created_at=_CREATED
+    )
+    net0, net1 = _total_net(r0), _total_net(r1)
+    assert net0 > 0.0  # a real edge exists at delay 0
+    assert net1 <= net0  # worse-or-equal under the 1-bar delay
+    assert net1 != net0  # and strictly different
 
 
 def test_runner_refuses_dev_grade_snapshot(

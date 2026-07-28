@@ -145,17 +145,33 @@ def build_trade_log(run: NautilusRun, bars: Bars) -> pd.DataFrame:
 
 
 def reconcile_gross(run: NautilusRun, spec: InstrumentSpec) -> float:
-    """Max abs difference between Nautilus realised PnL and T2's gross formula.
+    """Max abs difference between Nautilus realised PnL and T2's ``gross_pnl_usd``.
 
-    With ``fee_model=0`` Nautilus reports gross PnL; on the *same* fill prices and
-    multiplier it must equal ``sign * (exit - entry) * multiplier * qty`` to
-    floating-point tolerance. Returns the worst-case delta (0.0 when no trades).
+    With ``fee_model=0`` Nautilus reports gross PnL; on the *same* close-fill prices
+    it must equal T2's gross to floating-point tolerance (binding finding #4, with
+    T2 the authority). The gross is obtained by **invoking** T2's
+    :func:`~futures_engine.costs.model.delayed_fill_prices` -- the same function
+    that produces ``gross_pnl_usd`` everywhere -- over a synthetic 2-bar frame whose
+    opens are the Nautilus entry/exit close-fills (``delay_bars=0``), rather than
+    re-deriving the PnL arithmetic here. Returns the worst-case delta (0.0 when no
+    trades).
     """
     worst = 0.0
     for trade in run.closed:
-        sign = 1.0 if trade.side == "long" else -1.0
-        formula = sign * (trade.exit_px_close - trade.entry_px_close) * spec.multiplier * trade.qty
-        worst = max(worst, abs(trade.nautilus_pnl - formula))
+        ts_index = pd.to_datetime([trade.entry_ts_ns, trade.exit_ts_ns], utc=True)
+        synthetic_bars = pd.DataFrame(
+            {"open": [trade.entry_px_close, trade.exit_px_close]}, index=ts_index
+        )
+        one = pd.DataFrame(
+            {
+                "entry_ts": [ts_index[0]],
+                "exit_ts": [ts_index[1]],
+                "side": [trade.side],
+                "qty": [trade.qty],
+            }
+        )
+        t2_gross = float(delayed_fill_prices(one, synthetic_bars, spec, 0)["gross_pnl_usd"].iloc[0])
+        worst = max(worst, abs(trade.nautilus_pnl - t2_gross))
     return worst
 
 

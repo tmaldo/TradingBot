@@ -53,17 +53,18 @@ def test_guard_catches_multiplier_drift() -> None:
 
 
 def test_guard_catches_tick_value_drift() -> None:
-    # Same multiplier & tick but a corrupted tick_value must be caught.
-    bad = InstrumentSpec(
+    # Reach the dedicated tick_value branch: multiplier AND tick_size match, but
+    # tick_value is inconsistent. InstrumentSpec's own invariant (tick_value ==
+    # multiplier * tick_size) forbids constructing such a spec, so model_construct
+    # bypasses validation to simulate a corrupted spec reaching the runtime guard.
+    inst = build_nautilus_instrument(MES, Venue("GLBX"))  # mult 5, tick 0.25, tv 1.25
+    liar = InstrumentSpec.model_construct(
         symbol_root="MES",
         exchange="CME",
         tick_size=0.25,
-        tick_value=1.25,
+        tick_value=99.0,  # inconsistent with 5 * 0.25 = 1.25
         multiplier=5,
         currency="USD",
     )
-    inst = build_nautilus_instrument(bad, Venue("GLBX"))
-    # Fabricate a spec that lies about tick_value relative to multiplier*tick.
-    liar = bad.model_copy(update={"tick_size": 0.5, "tick_value": 2.5, "multiplier": 5})
-    with pytest.raises(InstrumentSpecMismatchError, match="tick_size mismatch"):
+    with pytest.raises(InstrumentSpecMismatchError, match="tick_value mismatch"):
         assert_spec_parity(inst, liar)
