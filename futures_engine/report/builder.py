@@ -15,8 +15,8 @@ The report needs a few more *inputs* to compute its mandatory contents without
 recomputing them from scratch, so :func:`build_report` keeps that positional core
 and the :class:`GateConfig` defaults and adds keyword-only parameters: the
 ``gross`` / ``delayed`` cost variants (for the red-flag edge-decay checks), the
-per-config ``perf_matrix`` (the CSCV input for PBO -- one Sharpe cell per config
-per time slice, which a single ``BacktestResult`` cannot carry), the sweep's
+per-config ``perf_matrix`` (the CSCV input for PBO -- one **mean net PnL** cell per
+config per time slice, which a single ``BacktestResult`` cannot carry), the sweep's
 ``strategy_family`` / ``cv_scheme``, the ``cost_cfg`` shown in the report, and the
 output directory. Everything else is derived internally.
 """
@@ -24,6 +24,7 @@ output directory. Everything else is derived internally.
 from __future__ import annotations
 
 import hashlib
+import html
 import json
 import math
 from dataclasses import dataclass
@@ -278,6 +279,10 @@ def compute_bundle(
     red_flag_config: RedFlagConfig | None = None,
 ) -> ReportBundle:
     """Compute every report number and the verdict (no I/O)."""
+    # Provenance note (accepted looseness): the sweep SELECTS the winning trial by a
+    # vectorized OOS ``sharpe_net``, whereas this ``observed_sharpe`` feeding the DSR is
+    # the winner's event-driven, full-sample, per-trade Sharpe from ``result``. The two
+    # Sharpes are computed differently on purpose; this is a known, accepted mismatch.
     observed_sharpe = float(result.metrics["sharpe"])
 
     # Honest DSR: n_trials comes straight from the trial store (G10).
@@ -450,7 +455,9 @@ def _flags_rows_html(flags: list[RedFlag]) -> str:
     if not flags:
         return "<p><em>None.</em></p>"
     rows = "".join(
-        f"<tr><td>{f.code}</td><td>{f.severity}</td><td>{f.message}</td></tr>" for f in flags
+        f"<tr><td>{html.escape(f.code)}</td><td>{html.escape(f.severity)}</td>"
+        f"<td>{html.escape(f.message)}</td></tr>"
+        for f in flags
     )
     return (
         "<table><thead><tr><th>code</th><th>severity</th><th>message</th></tr></thead>"
@@ -467,10 +474,14 @@ def render_html(b: ReportBundle, cost_cfg: CostConfig) -> str:
         for g in v.gates
     )
     snapshots_html = "</code>, <code>".join(b.data_snapshot_hashes)
+    # Internal constants today, but escaped defensively so an interpolated value can
+    # never break out of the HTML markup.
+    run_id_html = html.escape(b.run_id)
+    family_html = html.escape(b.strategy_family)
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Research report — {b.run_id}</title>
+<title>Research report — {run_id_html}</title>
 <style>
   body {{ font-family: system-ui, sans-serif; margin: 0 auto; max-width: 900px;
          padding: 1.5rem; color: #1a1a1a; }}
@@ -484,7 +495,7 @@ def render_html(b: ReportBundle, cost_cfg: CostConfig) -> str:
   h2 {{ margin-top: 1.8rem; border-bottom: 1px solid #eee; padding-bottom: 0.2rem; }}
 </style></head><body>
 <div class="banner">Verdict: {v.decision}</div>
-<p>Run <code>{b.run_id}</code> — strategy family <code>{b.strategy_family}</code>.
+<p>Run <code>{run_id_html}</code> — strategy family <code>{family_html}</code>.
 GO only if every gate passes and no fail-severity red flag fired.</p>
 <h2>Gates</h2><ul>{gate_items}</ul>
 <h2>Performance — gross vs net</h2>
@@ -521,6 +532,15 @@ GO only if every gate passes and no fail-severity red flag fired.</p>
 <tr><th>median days to target</th><td>{b.survival.median_days_to_target}</td></tr>
 </tbody></table>
 <h2>Red flags</h2>{_flags_rows_html(b.red_flags)}
+<h2>Costs applied</h2>
+<table><tbody>
+<tr><th>commission / side</th><td>{cost_cfg.commission_per_side_usd}</td></tr>
+<tr><th>exchange fee / side</th><td>{cost_cfg.exchange_fee_per_side_usd}</td></tr>
+<tr><th>NFA fee / side</th><td>{cost_cfg.nfa_fee_per_side_usd}</td></tr>
+<tr><th>spread (ticks)</th><td>{cost_cfg.spread_ticks}</td></tr>
+<tr><th>slippage</th><td>{cost_cfg.slippage} ({cost_cfg.slippage_ticks})</td></tr>
+<tr><th>delay bars</th><td>{cost_cfg.delay_bars}</td></tr>
+</tbody></table>
 <h2>Reproducibility</h2>
 <table><tbody>
 <tr><th>config hash</th><td><code>{b.config_hash}</code></td></tr>
@@ -528,7 +548,6 @@ GO only if every gate passes and no fail-severity red flag fired.</p>
 <tr><th>git SHA</th><td><code>{b.git_sha}</code></td></tr>
 <tr><th>seed</th><td>{b.seed}</td></tr>
 <tr><th>created at</th><td>{b.created_at.isoformat()}</td></tr>
-<tr><th>delay bars</th><td>{cost_cfg.delay_bars}</td></tr>
 </tbody></table>
 </body></html>
 """
