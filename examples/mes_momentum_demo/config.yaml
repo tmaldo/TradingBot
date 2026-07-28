@@ -1,0 +1,40 @@
+# MES momentum demo -- an HONEST demo that is expected to yield NO-GO.
+#
+# A plausible-but-not-winning Donchian-breakout momentum sweep on a bundled,
+# validation-grade synthetic MES snapshot (no real drift). It exercises the full
+# research pipeline and proves the system can say "no": on this fixture the edge
+# is not real, so the DSR / PBO / survival gates are not all cleared. Do NOT tune
+# this to GO -- the NO-GO outcome is the point (see tests/test_end_to_end.py).
+#
+# Validated by futures_engine.pipeline.run.PipelineConfig (extra="forbid").
+
+run_id: mes_momentum_demo
+instrument: MES                # resolves against configs/instruments.yaml
+signal: donchian_breakout      # key in SIGNAL_REGISTRY
+strategy_family: trend_momentum
+
+# The parameter sweep (one honest trial logged per combination -> DSR n_trials).
+grid:
+  window: [5, 10, 15, 20, 30, 40, 55, 100]
+
+# The bundled snapshot (regenerate with generate_snapshot.py).
+snapshot_hash: e8d77c8bacd325313d4e56741676028e50bc809945be4be1410334d885775a87
+
+prop_preset: topstep_50k       # resolves against configs/prop_rules.yaml
+seed: 7
+
+n_splits: 5
+embargo_frac: 0.02
+pbo_partitions: 8
+bootstrap_n: 300
+
+survival:
+  n_paths: 300
+  horizon_days: 30
+  contracts: 1
+
+# Verdict thresholds (defaults shown; GO only if ALL pass and no fail flag).
+gates:
+  min_dsr_p: 0.95
+  max_pbo: 0.5
+  min_survival: 0.90
