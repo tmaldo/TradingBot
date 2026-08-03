@@ -21,7 +21,10 @@ from __future__ import annotations
 import functools
 import json
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
+
+import yaml
 
 from futures_engine.pipeline.run import PipelineConfig, run_pipeline
 from futures_engine.report.builder import GateResult, Verdict
@@ -151,3 +154,135 @@ def load_report(run_dir: str | Path) -> ReportContext:
 
 def _as_str(value: object) -> str | None:
     return str(value) if value is not None else None
+
+
+# --- History (U6): light per-run summaries, tolerant of partial/failed dirs ---
+
+
+@dataclass(frozen=True, slots=True)
+class RunSummary:
+    """A LIGHT summary of one run dir for the History list (UI-G1: no recompute).
+
+    Deliberately does NOT embed ``report.html`` -- a list row needs only the run
+    id, its signal, the GO/NO-GO decision (or ``"incomplete"`` for a partial/failed
+    run), a couple of gate metrics, and a display timestamp. ``_sort_ts`` orders the
+    list newest-first; it is derived from file metadata (manifest ``created_at`` if
+    present, else the dir mtime), never the wall clock, so ordering is reproducible.
+    """
+
+    run_id: str
+    created_at: str | None
+    signal: str
+    decision: str
+    key_metrics: dict[str, str] = field(default_factory=dict)
+    _sort_ts: float = 0.0
+
+
+def summarize_run(run_dir: str | Path) -> RunSummary:
+    """Summarize one run dir from its on-disk artifacts, tolerant of any absence.
+
+    Reads ``config.yaml`` for the ``signal`` (``"?"`` if absent/unreadable) and
+    ``verdict.json`` for the ``decision`` + a couple of gate ``detail`` metrics. A
+    run dir with no ``verdict.json`` (failed/incomplete) is summarized with
+    ``decision="incomplete"`` and no metrics rather than raising. ``created_at``
+    comes from ``manifest.json`` when present, else the dir mtime; the same source
+    drives ``_sort_ts`` so the History list can order newest-first offline.
+    """
+    path = Path(run_dir)
+    run_id = path.name
+
+    signal = _read_signal(path / "config.yaml")
+    decision, key_metrics = _read_verdict(path / "verdict.json")
+    created_at, sort_ts = _read_created_at(path)
+
+    return RunSummary(
+        run_id=run_id,
+        created_at=created_at,
+        signal=signal,
+        decision=decision,
+        key_metrics=key_metrics,
+        _sort_ts=sort_ts,
+    )
+
+
+def list_runs(runs_root: str | Path) -> list[RunSummary]:
+    """Return newest-first :class:`RunSummary` for every run dir under ``runs_root``.
+
+    Each dir is summarized in a try/except so one unreadable/corrupt dir can never
+    sink the whole list (UI-G1 tolerance). A missing/empty root yields ``[]`` (the
+    template renders an empty-state, not an error). Ordering is by ``_sort_ts``
+    (manifest ``created_at`` else dir mtime), newest first.
+    """
+    root = Path(runs_root)
+    if not root.is_dir():
+        return []
+    summaries: list[RunSummary] = []
+    for child in root.iterdir():
+        if not child.is_dir():
+            continue
+        try:
+            summaries.append(summarize_run(child))
+        except Exception:  # one bad dir must not kill the list
+            continue
+    summaries.sort(key=lambda s: s._sort_ts, reverse=True)
+    return summaries
+
+
+def _read_signal(config_path: Path) -> str:
+    """Read the ``signal`` line from a run's ``config.yaml`` (``"?"`` on any absence)."""
+    if not config_path.is_file():
+        return "?"
+    try:
+        data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return "?"
+    if isinstance(data, dict):
+        signal = data.get("signal")
+        if isinstance(signal, str) and signal:
+            return signal
+    return "?"
+
+
+def _read_verdict(verdict_path: Path) -> tuple[str, dict[str, str]]:
+    """Return ``(decision, key_metrics)`` from ``verdict.json``; tolerant of absence.
+
+    A missing or unparsable verdict yields ``("incomplete", {})``. ``key_metrics``
+    maps each gate name to its ``detail`` string (the couple of numbers a row shows).
+    """
+    if not verdict_path.is_file():
+        return "incomplete", {}
+    verdict = Verdict.model_validate_json(verdict_path.read_text(encoding="utf-8"))
+    metrics = {gate.name: gate.detail for gate in verdict.gates}
+    return verdict.decision, metrics
+
+
+def _read_created_at(path: Path) -> tuple[str | None, float]:
+    """Return ``(display_created_at, sort_ts)`` for a run dir.
+
+    Prefers the manifest ``created_at`` (ISO-8601) for both the display string and
+    the sort timestamp; falls back to the dir mtime when the manifest is absent or
+    its timestamp unparsable. No wall-clock is consulted, so ordering is stable.
+    """
+    manifest_path = path / "manifest.json"
+    if manifest_path.is_file():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            manifest = {}
+        created = manifest.get("created_at") if isinstance(manifest, dict) else None
+        if isinstance(created, str) and created:
+            try:
+                ts = datetime.fromisoformat(created).timestamp()
+            except ValueError:
+                ts = _dir_mtime(path)
+            return created, ts
+    ts = _dir_mtime(path)
+    display = datetime.fromtimestamp(ts).isoformat(timespec="seconds") if ts else None
+    return display, ts
+
+
+def _dir_mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0

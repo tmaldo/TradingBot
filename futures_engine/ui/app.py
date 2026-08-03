@@ -39,7 +39,7 @@ from futures_engine.ui.data_panel import (
     list_snapshots,
 )
 from futures_engine.ui.jobs import JobRegistry, get_registry
-from futures_engine.ui.reportview import ReportContext, load_report, submit_run
+from futures_engine.ui.reportview import ReportContext, list_runs, load_report, submit_run
 
 # Job statuses that mean the run has finished (progress polling must stop).
 _TERMINAL_STATUSES = frozenset({"done", "failed"})
@@ -229,6 +229,12 @@ def create_app(
                 ctx = load_report(child)
                 entries.append({"run_id": child.name, "decision": ctx.decision})
         return templates.TemplateResponse(request, "runs.html", {"runs": entries})
+
+    @app.get("/history", response_class=HTMLResponse)
+    def history(request: Request) -> HTMLResponse:
+        # Canonical newest-first list of past runs (U6). Tolerant of partial/failed
+        # dirs (UI-G1): summarize_run degrades to "incomplete" instead of crashing.
+        return templates.TemplateResponse(request, "history.html", {"runs": list_runs(runs)})
 
     @app.post("/runs")
     def runs_enqueue(run_id: str = Form(...)) -> RedirectResponse:
