@@ -134,3 +134,72 @@ form button:disabled {
   color: var(--muted);
   cursor: not-allowed;
 }
+
+/* --- Run + report (U5) --------------------------------------------------- */
+.cockpit-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.cockpit-link:hover {
+  text-decoration: underline;
+}
+
+.run-status {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+}
+
+.run-status__msg {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+
+.run-status__trace {
+  overflow-x: auto;
+  padding: 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.verdict-banner {
+  padding: 0.9rem 1.2rem;
+  margin: 0.5rem 0 1.25rem;
+  border-radius: 6px;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.verdict-banner--go {
+  background: #0b7a34;
+}
+
+.verdict-banner--nogo {
+  background: #8a1f1f;
+}
+
+.gate-pass td:nth-child(2) {
+  color: #4ec27a;
+  font-weight: 600;
+}
+
+.gate-fail td:nth-child(2) {
+  color: #ff6b6b;
+  font-weight: 600;
+}
+
+.report-embed {
+  width: 100%;
+  height: 70vh;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+}

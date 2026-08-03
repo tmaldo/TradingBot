@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Run {{ run_id }} — futures-engine{% endblock %}
+{% block content %}
+<section class="cockpit-panel">
+  <h1>Run <code class="mono">{{ run_id }}</code></h1>
+  <p class="cockpit-muted">
+    The research pipeline runs in an isolated process; this panel refreshes itself
+    until the run finishes.
+  </p>
+  {% include "run_status.html" %}
+</section>
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Report {{ ctx.run_id }} — futures-engine{% endblock %}
+{% block content %}
+<section class="cockpit-panel">
+  <h1>Report <code class="mono">{{ ctx.run_id }}</code></h1>
+
+  {% if ctx.complete %}
+  <div class="verdict-banner verdict-banner--{{ 'go' if ctx.decision == 'GO' else 'nogo' }}">
+    Verdict: {{ ctx.decision }}
+  </div>
+
+  <h2>Gates</h2>
+  <table class="cockpit-table">
+    <thead>
+      <tr><th>Gate</th><th>Result</th><th>Detail</th></tr>
+    </thead>
+    <tbody>
+      {% for g in ctx.gates %}
+      <tr class="{{ 'gate-pass' if g.passed else 'gate-fail' }}">
+        <td>{{ g.name }}</td>
+        <td>{{ "PASS" if g.passed else "FAIL" }}</td>
+        <td class="mono">{{ g.detail }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>Reproducibility</h2>
+  <table class="cockpit-table">
+    <tbody>
+      <tr><th>config hash</th><td class="mono">{{ ctx.config_hash }}</td></tr>
+      <tr><th>data snapshots</th><td class="mono">{{ ctx.snapshot_hashes | join(", ") }}</td></tr>
+      <tr><th>git SHA</th><td class="mono">{{ ctx.git_sha }}</td></tr>
+      <tr><th>seed</th><td>{{ ctx.seed }}</td></tr>
+      <tr><th>created at</th><td class="mono">{{ ctx.created_at }}</td></tr>
+    </tbody>
+  </table>
+
+  {% if ctx.report_html %}
+  <h2>Full report</h2>
+  <iframe class="report-embed" srcdoc="{{ ctx.report_html }}"
+    title="Full research report for {{ ctx.run_id }}"></iframe>
+  {% endif %}
+
+  {% else %}
+  <div class="verdict-banner verdict-banner--nogo">No report artifacts</div>
+  <p class="cockpit-muted">
+    This run produced no artifacts&mdash;it likely failed before writing its verdict.
+    {% if ctx.missing %}Missing: <code class="mono">{{ ctx.missing | join(", ") }}</code>.{% endif %}
+    See the <a class="cockpit-link" href="/runs/{{ ctx.run_id }}">run page</a> for the traceback.
+  </p>
+  {% endif %}
+</section>
+{% endblock %}
