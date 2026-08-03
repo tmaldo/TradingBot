@@ -11,7 +11,7 @@
 ## Global Constraints (binding; violations = review rejection)
 
 - **UI-G1 Thin orchestration:** the UI calls existing audited functions; it must NOT re-implement pipeline, cost, validation, sizing, continuous-contract, or report logic. No second code path for anything under G1–G16.
-- **UI-G2 Optional extras, lazy import:** UI/data deps live in `[project.optional-dependencies]` extras `ui` (`fastapi`, `uvicorn`, `jinja2`, `python-multipart`) and `data` (`databento`) — NOT core. `import futures_engine` (and the existing 458-test suite) must still pass with neither extra installed; `futures_engine.ui.*` imports its web deps lazily.
+- **UI-G2 Optional extras, lazy import:** UI/data deps live in `[project.optional-dependencies]` extras `ui` (`fastapi`, `uvicorn`, `jinja2`, `python-multipart`, `httpx`) and `databento` (`databento`) — NOT core. `import futures_engine` (and the existing 458-test suite) must still pass with neither extra installed; `futures_engine.ui.*` imports its web deps lazily.
 - **UI-G3 Offline tests (inherits G15):** every test runs offline — FastAPI `TestClient`, recorded DBN fixtures, synthetic snapshots. No network in CI. HTMX is vendored as a static asset (no CDN).
 - **UI-G4 Local-only + secret hygiene:** server binds `127.0.0.1`; `DATABENTO_API_KEY` is read from env only, never logged, never written into any run config/manifest/report (only a boolean "real-data used" + the snapshot hash are recorded).
 - **UI-G5 CPU-bound isolation:** `run_pipeline` executes in a `ProcessPoolExecutor` (or subprocess), never on the event loop or a thread pool (pandas holds the GIL). Databento HTTP fetch (I/O-bound) may use a thread pool.
@@ -45,14 +45,14 @@ Run artifacts per run dir: report.md, report.html, verdict.json {decision, gates
 
 ### Task U1: UI scaffold — app factory, extras, base template, smoke test
 
-**Files:** Create `futures_engine/ui/{__init__,app.py}`, `futures_engine/ui/templates/{base.html,index.html}`, `futures_engine/ui/static/{htmx.min.js,cockpit.css}`, `tests/ui/{__init__,conftest.py,test_app.py}`. Modify `pyproject.toml` (`[project.optional-dependencies]` `ui`/`data` extras; `[project.scripts]` `futures-cockpit`).
+**Files:** Create `futures_engine/ui/{__init__,app.py}`, `futures_engine/ui/templates/{base.html,index.html}`, `futures_engine/ui/static/{htmx.min.js,cockpit.css}`, `tests/ui/{__init__,conftest.py,test_app.py}`. Modify `pyproject.toml` (`[project.optional-dependencies]` `ui`/`databento` extras; `[project.scripts]` `futures-cockpit`).
 
 **Interfaces:**
 - Consumes: nothing from other UI tasks.
 - Produces: `futures_engine.ui.app.create_app() -> FastAPI` (app factory); `futures_engine.ui.app.main() -> None` (console entry: `uvicorn.run(create_app(), host="127.0.0.1", port=8000)`); a Jinja `templates` env + `static` mount; base layout with a nav (Configure / Data / Runs) and the vendored `htmx.min.js`.
 
 **Acceptance criteria:**
-- [ ] `pip install -e ".[dev,ui,data]"` installs the extras; `import futures_engine` and the full existing suite still pass with NO extras installed (UI-G2 — test the lazy-import boundary: `futures_engine.ui.app` importing without fastapi raises a clear message, but `import futures_engine` never does).
+- [ ] `pip install -e ".[dev,ui,databento]"` installs the extras; `import futures_engine` and the full existing suite still pass with NO extras installed (UI-G2 — test the lazy-import boundary: `futures_engine.ui.app` importing without fastapi raises a clear message, but `import futures_engine` never does).
 - [ ] `create_app()` returns a FastAPI app bound conceptually to `127.0.0.1`; `GET /` renders the index (nav + HTMX loaded from `/static/htmx.min.js`, not a CDN — UI-G3).
 - [ ] `TestClient(create_app()).get("/")` → 200 and contains the nav links; `/static/htmx.min.js` → 200.
 - [ ] mypy/ruff/format clean; `main()` exists and is wired as the `futures-cockpit` script (do not invoke a live server in tests).
@@ -156,5 +156,5 @@ Run artifacts per run dir: report.md, report.html, verdict.json {decision, gates
 
 - [ ] `futures-cockpit` launches a local app on `127.0.0.1:8000`; Configure → Data → Run → Report → History all work on synthetic data offline.
 - [ ] With a `DATABENTO_API_KEY`, the Data panel fetches real MES/MNQ history into a validation-grade snapshot; without one, the cockpit is fully usable on synthetic/existing snapshots.
-- [ ] `import futures_engine` + the pre-existing 458-test suite pass with NO ui/data extras installed; the new UI suite passes with the extras. mypy/ruff/format clean across the repo.
+- [ ] `import futures_engine` + the pre-existing 458-test suite pass with NO ui/databento extras installed; the new UI suite passes with the extras. mypy/ruff/format clean across the repo.
 - [ ] No trading/cost/validation/sizing/data/report logic reimplemented in `ui/` (UI-G1); `DATABENTO_API_KEY` never logged or persisted (UI-G4); runs execute in a process pool (UI-G5).
