@@ -123,8 +123,10 @@ def test_list_runs_bad_dir_does_not_kill_list(tmp_path: Path) -> None:
     summaries = list_runs(tmp_path)
     run_ids = {s.run_id for s in summaries}
     assert "good" in run_ids
-    # corrupt is either listed as incomplete or skipped, but never raises.
-    assert "corrupt" not in run_ids or by_decision(summaries, "corrupt") == "incomplete"
+    # A present-but-corrupt verdict must degrade to "incomplete" and STAY listed --
+    # a real run must never silently vanish from History.
+    assert "corrupt" in run_ids
+    assert by_decision(summaries, "corrupt") == "incomplete"
 
 
 def by_decision(summaries: list[RunSummary], run_id: str) -> str | None:

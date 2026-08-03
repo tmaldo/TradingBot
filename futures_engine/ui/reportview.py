@@ -222,7 +222,9 @@ def list_runs(runs_root: str | Path) -> list[RunSummary]:
             continue
         try:
             summaries.append(summarize_run(child))
-        except Exception:  # one bad dir must not kill the list
+        except Exception:  # last-resort guard (e.g. stat/permission errors), not the
+            # primary tolerance path -- missing/corrupt verdicts are handled in
+            # _read_verdict so a bad run degrades to "incomplete" and stays listed.
             continue
     summaries.sort(key=lambda s: s._sort_ts, reverse=True)
     return summaries
@@ -251,7 +253,12 @@ def _read_verdict(verdict_path: Path) -> tuple[str, dict[str, str]]:
     """
     if not verdict_path.is_file():
         return "incomplete", {}
-    verdict = Verdict.model_validate_json(verdict_path.read_text(encoding="utf-8"))
+    try:
+        verdict = Verdict.model_validate_json(verdict_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        # Present-but-corrupt verdict (bad JSON / failed pydantic validation) degrades
+        # to "incomplete" so the run STAYS listed in History rather than vanishing.
+        return "incomplete", {}
     metrics = {gate.name: gate.detail for gate in verdict.gates}
     return verdict.decision, metrics
 
