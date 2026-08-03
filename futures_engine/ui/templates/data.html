@@ -58,8 +58,55 @@
 
 <section class="cockpit-panel">
   <h2>Fetch real data (Databento)</h2>
+  {% if fetch_error %}
+  <p class="cockpit-error" role="alert">{{ fetch_error }}</p>
+  {% endif %}
   {% if databento_enabled %}
-  <p class="cockpit-muted">Databento is configured. The fetch flow ships in a later task.</p>
+  <p class="cockpit-muted">
+    Pulls individual contract months (parent <code>.FUT</code> symbology) and stitches
+    them into a validation-grade continuous snapshot via the engine's own
+    <code>build_continuous</code> (preserving <code>ContinuousMeta</code>).
+  </p>
+  <form method="post" action="/data/fetch">
+    <label>Dataset
+      <input type="text" name="dataset" value="GLBX.MDP3" readonly />
+    </label>
+    <label>Schema
+      <input type="text" name="schema" value="ohlcv-1m" readonly />
+    </label>
+    <label>Symbol root
+      <select name="symbol_root">
+        <option value="MES">MES</option>
+        <option value="MNQ">MNQ</option>
+      </select>
+    </label>
+    <label>Start
+      <input type="date" name="start" value="2024-06-01" required />
+    </label>
+    <label>End
+      <input type="date" name="end" value="2024-06-30" required />
+    </label>
+    <label>Roll rule
+      <select name="roll_rule">
+        <option value="volume">volume</option>
+        <option value="open_interest">open_interest</option>
+        <option value="calendar">calendar</option>
+      </select>
+    </label>
+    <label>Adjustment
+      <select name="adjustment">
+        <option value="panama_diff">panama_diff</option>
+        <option value="ratio">ratio</option>
+        <option value="none">none</option>
+      </select>
+    </label>
+    <button type="submit">Fetch</button>
+  </form>
+  <p class="cockpit-muted">
+    Fast-follow (needs a key, not automatable offline): confirm Databento's live
+    response shape with <code>help(get_range)</code> plus one real MES pull before
+    trusting live fetches.
+  </p>
   {% else %}
   <fieldset disabled aria-disabled="true">
     <p class="cockpit-muted">

@@ -12,10 +12,12 @@ The server binds ``127.0.0.1`` only (UI-G4) and HTMX is served from the local
 from __future__ import annotations
 
 import os
+from datetime import datetime
 from pathlib import Path
 
 try:  # pragma: no cover - exercised via the lazy-import boundary test
     from fastapi import FastAPI, Form, HTTPException, Request
+    from fastapi.concurrency import run_in_threadpool
     from fastapi.responses import HTMLResponse, RedirectResponse, Response
     from fastapi.staticfiles import StaticFiles
     from fastapi.templating import Jinja2Templates
@@ -35,6 +37,7 @@ from futures_engine.ui.config_form import (
 )
 from futures_engine.ui.data_panel import (
     databento_enabled,
+    fetch_databento_snapshot,
     generate_synthetic,
     list_snapshots,
 )
@@ -127,16 +130,16 @@ def create_app(
     def index(request: Request) -> HTMLResponse:
         return templates.TemplateResponse(request, "index.html")
 
+    def _data_context(error: str | None = None) -> dict[str, object]:
+        return {
+            "snapshots": list_snapshots(root),
+            "databento_enabled": databento_enabled(),
+            "fetch_error": error,
+        }
+
     @app.get("/data", response_class=HTMLResponse)
     def data(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(
-            request,
-            "data.html",
-            {
-                "snapshots": list_snapshots(root),
-                "databento_enabled": databento_enabled(),
-            },
-        )
+        return templates.TemplateResponse(request, "data.html", _data_context())
 
     @app.post("/data/synthetic")
     def create_synthetic(
@@ -146,6 +149,42 @@ def create_app(
     ) -> RedirectResponse:
         generate_synthetic(root, symbol_root=symbol_root, n_bars=n_bars, seed=seed)
         # POST/redirect/GET: refresh the list without re-submitting on reload.
+        return RedirectResponse(url="/data", status_code=303)
+
+    @app.post("/data/fetch")
+    async def fetch_real(
+        request: Request,
+        symbol_root: str = Form("MES"),
+        start: str = Form(...),
+        end: str = Form(...),
+        roll_rule: str = Form("volume"),
+        adjustment: str = Form("panama_diff"),
+    ) -> Response:
+        # Gate strictly on key presence (UI-G4): the panel disables the form
+        # without a key; a direct POST is refused rather than half-served.
+        api_key = os.environ.get("DATABENTO_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=400, detail="DATABENTO_API_KEY is not set")
+        try:
+            start_dt = datetime.fromisoformat(start)
+            end_dt = datetime.fromisoformat(end)
+            # I/O-bound (network) work -> thread pool, NOT the U2 process pool.
+            await run_in_threadpool(
+                fetch_databento_snapshot,
+                root,
+                symbol_root=symbol_root,
+                start=start_dt,
+                end=end_dt,
+                roll_rule=roll_rule,  # type: ignore[arg-type]
+                adjustment=adjustment,  # type: ignore[arg-type]
+                api_key=api_key,
+            )
+        except Exception as exc:
+            # No partial snapshot: save() is only reached on a clean, complete fetch.
+            # The key is never included in the surfaced message.
+            context = _data_context(error=f"Databento fetch failed: {exc}")
+            return templates.TemplateResponse(request, "data.html", context, status_code=200)
+        # POST/redirect/GET: refresh the snapshot list.
         return RedirectResponse(url="/data", status_code=303)
 
     def _configure_context(values: dict[str, str], errors: list[str] | None) -> dict[str, object]:

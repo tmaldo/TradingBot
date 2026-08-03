@@ -14,11 +14,13 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
-from futures_engine.core.types import BarInterval
-from futures_engine.data.store import SnapshotStore
+from futures_engine.core.types import BarInterval, DatasetMeta
+from futures_engine.data.adapters.databento_adapter import DatabentoAdapter
+from futures_engine.data.continuous import Adjustment, RollRule, build_continuous
+from futures_engine.data.store import PENDING_SNAPSHOT_HASH, SnapshotStore
 from futures_engine.data.synthetic import generate_synthetic_snapshot
 
 
@@ -77,6 +79,58 @@ def generate_synthetic(
         seed=seed,
         interval=interval,
     )
+
+
+def fetch_databento_snapshot(
+    store_root: str | Path,
+    *,
+    symbol_root: str,
+    start: datetime,
+    end: datetime,
+    roll_rule: RollRule,
+    adjustment: Adjustment,
+    api_key: str,
+    interval: BarInterval = "1m",
+    dataset: str = "GLBX.MDP3",
+) -> str:
+    """Fetch real MES/MNQ history from Databento into a validation-grade snapshot.
+
+    Thin orchestration (UI-G1): the EXISTING :class:`DatabentoAdapter` does the
+    audited fetch + parse (parent ``.FUT`` symbology, fixed-point->float64 x 1e-9,
+    ``ts_event``->bar-open, scale 1e-9), and :func:`build_continuous` does explicit
+    continuous stitching (G3). We only wire them together, then persist the result
+    via :class:`SnapshotStore`.
+
+    The snapshot is written **only** after every per-contract fetch and the
+    continuous build have succeeded -- a mid-fetch error propagates and leaves no
+    partial snapshot on disk. Returns the content hash.
+
+    Key hygiene (UI-G4): ``api_key`` comes from the caller (``os.environ`` at the
+    route) and is used solely to construct the adapter. It is never logged and
+    never written into :class:`DatasetMeta`/the manifest -- the meta records only
+    ``source="databento"`` plus the content hash.
+    """
+    adapter = DatabentoAdapter(api_key=api_key, dataset=dataset)
+    contracts = adapter.list_contracts(symbol_root, start.date(), end.date())
+    if not contracts:
+        raise ValueError(f"Databento returned no contracts for {symbol_root!r} in the given range")
+    per_contract = {c.symbol: adapter.fetch_bars(c.symbol, start, end, interval) for c in contracts}
+
+    bars, cmeta = build_continuous(per_contract, contracts, roll_rule, adjustment)
+
+    meta = DatasetMeta(
+        symbol_root=symbol_root,
+        source="databento",
+        interval=interval,
+        start=bars.index[0].to_pydatetime(),
+        end=bars.index[-1].to_pydatetime(),
+        continuous=cmeta,
+        snapshot_hash=PENDING_SNAPSHOT_HASH,
+        as_of=datetime.now(UTC),
+        validation_grade=True,
+    )
+    # Reached only on a clean, complete fetch + build -> no partial snapshot.
+    return SnapshotStore(store_root).save(bars, meta)
 
 
 def databento_enabled() -> bool:
