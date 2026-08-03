@@ -62,6 +62,18 @@ dev = [
     # acceptance). Not imported by library code, hence dev-only. Has 3.14 wheels.
     "statsmodels>=0.14",
 ]
+# Research cockpit: local FastAPI + HTMX browser UI. A THIN orchestration layer
+# over the audited pipeline (UI-G1). Web deps live in the `ui` extra only -- never
+# in core dependencies (UI-G2) -- and futures_engine.ui imports them lazily so
+# `import futures_engine` and the core suite pass with no extras installed.
+ui = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.9",
+    # httpx backs Starlette's in-process TestClient (offline smoke tests, UI-G3).
+    "httpx>=0.27",
+]
 # Vendor SDKs live in optional extras only -- never in core dependencies (G1/G2).
 # Adapters import these lazily and raise a clear error naming the extra if absent.
 databento = ["databento>=0.34"]
@@ -71,6 +83,9 @@ dev-data = ["yfinance>=0.2"]  # DEV ONLY -- NOT FOR VALIDATION (G1)
 [project.scripts]
 # Look-ahead audit over all registered point-in-time checks (CI + local, G4).
 audit-run = "futures_engine.data.audit:main"
+# Research cockpit: launches the local-only FastAPI + HTMX UI (127.0.0.1:8000).
+# Requires the `ui` extra (pip install -e ".[ui]").
+futures-cockpit = "futures_engine.ui.app:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["futures_engine"]
@@ -83,6 +98,10 @@ filterwarnings = [
     # internally during BacktestEngine.run(); third-party and outside our control.
     # Scoped to this exact message so our own deprecations still surface.
     "ignore:Timestamp.utcnow is deprecated:",
+    # Starlette's TestClient warns that httpx is deprecated in favour of a
+    # not-yet-released `httpx2`; third-party and outside our control. Scoped to
+    # this exact message so our own deprecations still surface (UI-G8).
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated:",
 ]
 
 # mypy: strict on library code only (futures_engine/). Tests are intentionally
