@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from datetime import UTC, date, datetime
 from pathlib import Path
 
@@ -168,11 +169,19 @@ def test_yfinance_list_contracts_not_supported() -> None:
 # --- missing SDK errors name the extra ---------------------------------------
 
 
-def test_missing_sdk_errors_name_extra() -> None:
+def test_missing_sdk_errors_name_extra(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Simulate each vendor SDK being absent regardless of what is installed in
+    # this environment: setting ``sys.modules[name] = None`` makes ``import name``
+    # raise ``ModuleNotFoundError``, which is exactly what each ``_require_*``
+    # helper catches and re-raises with an extra-naming message. This keeps the
+    # test deterministic and offline whether or not the optional SDK is present.
+    monkeypatch.setitem(sys.modules, "databento", None)
     with pytest.raises(ModuleNotFoundError, match=r"databento\]"):
         _require_databento()
+    monkeypatch.setitem(sys.modules, "norgatedata", None)
     with pytest.raises(ModuleNotFoundError, match=r"norgate\]"):
         _require_norgatedata()
+    monkeypatch.setitem(sys.modules, "yfinance", None)
     with pytest.raises(ModuleNotFoundError, match=r"dev-data\]"):
         _require_yfinance()
 
