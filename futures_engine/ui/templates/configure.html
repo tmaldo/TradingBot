@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Configure — futures-engine{% endblock %}
+{% block content %}
+<section class="cockpit-panel">
+  <h1>Configure run</h1>
+  <p class="cockpit-muted">
+    Build a validated pipeline config. Fields are checked by the same pydantic model
+    the CLI uses — no hand-edited YAML. <code>strategy_family</code> is derived from the
+    signal (honest DSR); it is not editable.
+  </p>
+
+  {% if errors %}
+  <div class="cockpit-errors" role="alert">
+    <strong>Could not build config — please fix the following error(s):</strong>
+    <ul>
+      {% for err in errors %}<li>{{ err }}</li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <form method="post" action="/configure">
+    <label>Run id
+      <input type="text" name="run_id" value="{{ values.run_id }}" required />
+    </label>
+
+    <label>Instrument
+      <select name="instrument">
+        {% for inst in instruments %}
+        <option value="{{ inst }}" {% if inst == values.instrument %}selected{% endif %}>{{ inst }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>Signal
+      <select name="signal">
+        {% for sig in signals %}
+        <option value="{{ sig }}" {% if sig == values.signal %}selected{% endif %}>{{ sig }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <p class="cockpit-muted">strategy_family is auto-derived from the chosen signal.</p>
+
+    <label>Parameter grid
+      <textarea name="grid" rows="4" placeholder="window: 5, 10, 15, 20">{{ values.grid }}</textarea>
+    </label>
+    <p class="cockpit-muted">One axis per line: <code>name: v1, v2, v3</code> (integers).</p>
+
+    <label>Snapshot
+      <select name="snapshot_hash">
+        {% for s in snapshots %}
+        <option value="{{ s.hash }}" {% if s.hash == values.snapshot_hash %}selected{% endif %}>
+          {{ s.hash[:12] }} — {{ s.symbol_root }} {{ s.interval }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    {% if not snapshots %}
+    <p class="cockpit-muted">No snapshots yet — generate one on the Data screen first.</p>
+    <input type="text" name="snapshot_hash" value="{{ values.snapshot_hash }}" placeholder="snapshot hash" />
+    {% endif %}
+
+    <label>Prop preset
+      <select name="prop_preset">
+        {% for p in presets %}
+        <option value="{{ p }}" {% if p == values.prop_preset %}selected{% endif %}>{{ p }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <fieldset>
+      <legend>Validation</legend>
+      <label>Seed <input type="number" name="seed" value="{{ values.seed }}" /></label>
+      <label>CV splits <input type="number" name="n_splits" value="{{ values.n_splits }}" /></label>
+      <label>Embargo fraction <input type="text" name="embargo_frac" value="{{ values.embargo_frac }}" /></label>
+      <label>PBO partitions <input type="number" name="pbo_partitions" value="{{ values.pbo_partitions }}" /></label>
+      <label>Bootstrap n <input type="number" name="bootstrap_n" value="{{ values.bootstrap_n }}" /></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Survival (Monte-Carlo)</legend>
+      <label>Paths <input type="number" name="survival_n_paths" value="{{ values.survival_n_paths }}" /></label>
+      <label>Horizon (days) <input type="number" name="survival_horizon_days" value="{{ values.survival_horizon_days }}" /></label>
+      <label>Contracts <input type="number" name="survival_contracts" value="{{ values.survival_contracts }}" /></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Gates</legend>
+      <label>Min DSR p <input type="text" name="gate_min_dsr_p" value="{{ values.gate_min_dsr_p }}" /></label>
+      <label>Max PBO <input type="text" name="gate_max_pbo" value="{{ values.gate_max_pbo }}" /></label>
+      <label>Min survival <input type="text" name="gate_min_survival" value="{{ values.gate_min_survival }}" /></label>
+    </fieldset>
+
+    <button type="submit">Build &amp; save config</button>
+  </form>
+</section>
+{% endblock %}

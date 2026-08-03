@@ -1,0 +1,205 @@
+:root {
+  --bg: #0f1115;
+  --panel: #171a21;
+  --fg: #e6e9ef;
+  --muted: #9aa3b2;
+  --accent: #4f8cff;
+  --border: #262b36;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.cockpit-header {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.75rem 1.25rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.cockpit-brand {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.cockpit-nav {
+  display: flex;
+  gap: 1rem;
+}
+
+.cockpit-nav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.cockpit-nav a:hover {
+  color: var(--accent);
+}
+
+.cockpit-main {
+  padding: 1.5rem 1.25rem;
+}
+
+.cockpit-panel {
+  max-width: 46rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+}
+
+.cockpit-panel h1 {
+  margin-top: 0;
+}
+
+.cockpit-panel p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.cockpit-panel + .cockpit-panel {
+  margin-top: 1.25rem;
+}
+
+.cockpit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.cockpit-table th,
+.cockpit-table td {
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.cockpit-table th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.cockpit-table .mono {
+  font-family: ui-monospace, "Cascadia Code", monospace;
+}
+
+.cockpit-empty {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.cockpit-muted {
+  color: var(--muted);
+}
+
+form label {
+  display: block;
+  margin: 0.5rem 0;
+  color: var(--fg);
+}
+
+form input {
+  display: block;
+  margin-top: 0.25rem;
+  padding: 0.35rem 0.5rem;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+form button {
+  margin-top: 0.75rem;
+  padding: 0.45rem 1rem;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+form button:disabled {
+  background: var(--border);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+/* --- Run + report (U5) --------------------------------------------------- */
+.cockpit-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.cockpit-link:hover {
+  text-decoration: underline;
+}
+
+.run-status {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+}
+
+.run-status__msg {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+
+.run-status__trace {
+  overflow-x: auto;
+  padding: 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.verdict-banner {
+  padding: 0.9rem 1.2rem;
+  margin: 0.5rem 0 1.25rem;
+  border-radius: 6px;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.verdict-banner--go {
+  background: #0b7a34;
+}
+
+.verdict-banner--nogo {
+  background: #8a1f1f;
+}
+
+.gate-pass td:nth-child(2) {
+  color: #4ec27a;
+  font-weight: 600;
+}
+
+.gate-fail td:nth-child(2) {
+  color: #ff6b6b;
+  font-weight: 600;
+}
+
+.report-embed {
+  width: 100%;
+  height: 70vh;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+}

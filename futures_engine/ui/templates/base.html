@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}futures-engine research cockpit{% endblock %}</title>
+    <link rel="stylesheet" href="/static/cockpit.css" />
+    <!-- HTMX is vendored and served locally (UI-G3): never a CDN URL. -->
+    <script src="/static/htmx.min.js" defer></script>
+  </head>
+  <body>
+    <header class="cockpit-header">
+      <span class="cockpit-brand">futures-engine</span>
+      <nav class="cockpit-nav">
+        <a href="/configure" data-nav="configure">Configure</a>
+        <a href="/data" data-nav="data">Data</a>
+        <a href="/runs" data-nav="runs">Runs</a>
+        <a href="/history" data-nav="history">History</a>
+      </nav>
+    </header>
+    <main class="cockpit-main">
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>

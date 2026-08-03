@@ -1,0 +1,14 @@
+[
+  {
+    "raw_symbol": "MESM4",
+    "instrument_id": 1,
+    "activation": 1702598400000000000,
+    "expiration": 1718928000000000000
+  },
+  {
+    "raw_symbol": "MESU4",
+    "instrument_id": 2,
+    "activation": 1704153600000000000,
+    "expiration": 1726790400000000000
+  }
+]

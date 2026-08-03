@@ -207,3 +207,21 @@ def test_require_validation_grade_rejects_dev_grade() -> None:
 def test_require_validation_grade_rejects_missing_continuous() -> None:
     with pytest.raises(DataIntegrityError, match="continuous"):
         require_validation_grade(_meta(continuous=None))
+
+
+# --- list(): read-only enumeration (U3 additive helper) ---------------------
+
+
+def test_list_empty_store_returns_empty(tmp_path: Path) -> None:
+    store = SnapshotStore(tmp_path)
+    assert store.list() == []
+
+
+def test_list_returns_all_saved_metas(tmp_path: Path) -> None:
+    store = SnapshotStore(tmp_path)
+    h1 = store.save(_bars([1.0, 2.0, 3.0]), _meta())
+    h2 = store.save(_bars([4.0, 5.0, 6.0]), _meta())
+    metas = store.list()
+    assert {m.snapshot_hash for m in metas} == {h1, h2}
+    # Metas round-trip fully (not just hashes).
+    assert all(m.validation_grade for m in metas)

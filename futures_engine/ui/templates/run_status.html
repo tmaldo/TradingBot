@@ -1,0 +1,12 @@
+<div id="run-status" class="run-status run-status--{{ status }}"
+  {% if not terminal %}hx-get="/runs/{{ run_id }}/status" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  {% if status == "done" %}
+  <p class="run-status__msg">Run complete.</p>
+  <p><a class="cockpit-link" href="/runs/{{ run_id }}/report">View report &rarr;</a></p>
+  {% elif status == "failed" %}
+  <p class="run-status__msg">Run failed &mdash; no artifacts were produced.</p>
+  <pre class="run-status__trace">{{ error }}</pre>
+  {% else %}
+  <p class="run-status__msg">Run {{ status }}&hellip;</p>
+  {% endif %}
+</div>

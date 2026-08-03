@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Runs — futures-engine{% endblock %}
+{% block content %}
+<section class="cockpit-panel">
+  <h1>Runs</h1>
+  {% if runs %}
+  <table class="cockpit-table">
+    <thead>
+      <tr><th>Run</th><th>Verdict</th></tr>
+    </thead>
+    <tbody>
+      {% for r in runs %}
+      <tr>
+        <td><a class="cockpit-link" href="/runs/{{ r.run_id }}">{{ r.run_id }}</a></td>
+        <td>{{ r.decision or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="cockpit-empty">No runs yet. Configure one to get started.</p>
+  {% endif %}
+</section>
+{% endblock %}
