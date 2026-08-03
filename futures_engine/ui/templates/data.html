@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Data — futures-engine{% endblock %}
+{% block content %}
+<section class="cockpit-panel">
+  <h1>Data</h1>
+
+  <h2>Snapshots</h2>
+  {% if snapshots %}
+  <table class="cockpit-table">
+    <thead>
+      <tr>
+        <th>Hash</th>
+        <th>Symbol</th>
+        <th>Interval</th>
+        <th>Start</th>
+        <th>End</th>
+        <th>Validation-grade</th>
+        <th>Continuous</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in snapshots %}
+      <tr>
+        <td class="mono">{{ s.hash[:12] }}</td>
+        <td>{{ s.symbol_root }}</td>
+        <td>{{ s.interval }}</td>
+        <td>{{ s.start.isoformat() }}</td>
+        <td>{{ s.end.isoformat() }}</td>
+        <td>{{ "yes" if s.validation_grade else "no" }}</td>
+        <td>{{ "yes" if s.has_continuous_meta else "no" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="cockpit-empty">No snapshots yet. Generate a synthetic one below to get started.</p>
+  {% endif %}
+</section>
+
+<section class="cockpit-panel">
+  <h2>Generate synthetic snapshot</h2>
+  <p class="cockpit-muted">
+    Writes a seeded, validation-grade snapshot (with continuous meta) for offline research.
+  </p>
+  <form method="post" action="/data/synthetic">
+    <label>Symbol root
+      <input type="text" name="symbol_root" value="MES" />
+    </label>
+    <label>Bars
+      <input type="number" name="n_bars" value="2500" min="1" />
+    </label>
+    <label>Seed
+      <input type="number" name="seed" value="7" />
+    </label>
+    <button type="submit">Generate</button>
+  </form>
+</section>
+
+<section class="cockpit-panel">
+  <h2>Fetch real data (Databento)</h2>
+  {% if databento_enabled %}
+  <p class="cockpit-muted">Databento is configured. The fetch flow ships in a later task.</p>
+  {% else %}
+  <fieldset disabled aria-disabled="true">
+    <p class="cockpit-muted">
+      Disabled — set <code>DATABENTO_API_KEY</code> to enable real data fetching.
+    </p>
+    <button type="button" disabled>Fetch</button>
+  </fieldset>
+  {% endif %}
+</section>
+{% endblock %}

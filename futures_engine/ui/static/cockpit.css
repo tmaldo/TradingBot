@@ -67,3 +67,70 @@ body {
   color: var(--muted);
   line-height: 1.5;
 }
+
+.cockpit-panel + .cockpit-panel {
+  margin-top: 1.25rem;
+}
+
+.cockpit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.cockpit-table th,
+.cockpit-table td {
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.cockpit-table th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.cockpit-table .mono {
+  font-family: ui-monospace, "Cascadia Code", monospace;
+}
+
+.cockpit-empty {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.cockpit-muted {
+  color: var(--muted);
+}
+
+form label {
+  display: block;
+  margin: 0.5rem 0;
+  color: var(--fg);
+}
+
+form input {
+  display: block;
+  margin-top: 0.25rem;
+  padding: 0.35rem 0.5rem;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+form button {
+  margin-top: 0.75rem;
+  padding: 0.45rem 1rem;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+form button:disabled {
+  background: var(--border);
+  color: var(--muted);
+  cursor: not-allowed;
+}

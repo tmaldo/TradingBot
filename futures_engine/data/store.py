@@ -183,6 +183,19 @@ class SnapshotStore:
         meta_path.write_text(resolved.model_dump_json(), encoding="utf-8")
         return snapshot_hash
 
+    def list(self) -> list[DatasetMeta]:
+        """Return the persisted :class:`DatasetMeta` of every stored snapshot.
+
+        Read-only enumeration over the sidecar meta files under the store root,
+        sorted by ``snapshot_hash`` for a stable order. This does not touch the
+        content-hash, save, or load semantics; it exists so callers (e.g. the UI)
+        need not couple to the on-disk layout. Bars are not loaded.
+        """
+        metas: list[DatasetMeta] = []
+        for meta_path in sorted(self._root.glob("*.meta.json")):
+            metas.append(DatasetMeta.model_validate_json(meta_path.read_text(encoding="utf-8")))
+        return metas
+
     def load(self, snapshot_hash: str) -> tuple[Bars, DatasetMeta]:
         """Return the ``(bars, meta)`` for ``snapshot_hash`` (bars bit-identical to save)."""
         parquet_path = self._parquet_path(snapshot_hash)
